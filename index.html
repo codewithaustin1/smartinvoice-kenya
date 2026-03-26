@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartInvoice Kenya - Professional Invoice Generator with M-PESA</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💰 SmartInvoice Kenya</h1>
+            <p>Create professional invoices & get paid instantly with M-PESA</p>
+        </header>
+
+        <div class="pricing-banner">
+            <span>✨ Free to create invoice | M-PESA: 1.5% | Cards: 2.9% + KES 20</span>
+        </div>
+
+        <form id="invoiceForm">
+            <div class="form-section">
+                <h2>Business Details</h2>
+                <div class="form-group">
+                    <label>Your Business Name</label>
+                    <input type="text" id="businessName" placeholder="e.g., Acme Enterprises Ltd" required>
+                </div>
+                <div class="form-group">
+                    <label>Your Email</label>
+                    <input type="email" id="businessEmail" placeholder="you@business.co.ke" required>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2>Client Details</h2>
+                <div class="form-group">
+                    <label>Client Name</label>
+                    <input type="text" id="clientName" placeholder="John Mwangi" required>
+                </div>
+                <div class="form-group">
+                    <label>Client Email</label>
+                    <input type="email" id="clientEmail" placeholder="client@example.co.ke" required>
+                </div>
+                <div class="form-group">
+                    <label>Client Phone (for M-PESA)</label>
+                    <input type="tel" id="clientPhone" placeholder="254712345678" required>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2>Invoice Items</h2>
+                <div id="itemsContainer">
+                    <div class="invoice-item">
+                        <input type="text" placeholder="Item description" class="item-desc" required>
+                        <input type="number" placeholder="Quantity" class="item-qty" required>
+                        <input type="number" placeholder="Price (KES)" class="item-price" required>
+                        <button type="button" class="remove-item" onclick="removeItem(this)">×</button>
+                    </div>
+                </div>
+                <button type="button" id="addItemBtn" class="btn-secondary">+ Add Item</button>
+            </div>
+
+            <div class="form-section">
+                <div class="form-group">
+                    <label>Due Date</label>
+                    <input type="date" id="dueDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Notes (Optional)</label>
+                    <textarea id="notes" rows="3" placeholder="Payment terms, thank you note, M-PESA number, etc."></textarea>
+                </div>
+            </div>
+
+            <div class="summary">
+                <h3>Summary</h3>
+                <div class="summary-line">
+                    <span>Subtotal:</span>
+                    <span id="subtotal">KES 0</span>
+                </div>
+                <div class="summary-line">
+                    <span>Payment Fee (varies by method):</span>
+                    <span id="fee">KES 0</span>
+                </div>
+                <div class="summary-line total">
+                    <span>Total:</span>
+                    <span id="total">KES 0</span>
+                </div>
+            </div>
+
+            <button type="submit" id="generateBtn" class="btn-primary">Generate Invoice & Send M-PESA Payment Link</button>
+        </form>
+
+        <div id="invoicePreview" class="invoice-preview" style="display: none;">
+            <h2>✅ Invoice Generated!</h2>
+            <div id="previewContent"></div>
+            <button id="copyLinkBtn" class="btn-secondary">Copy M-PESA Payment Link</button>
+        </div>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="script.js"></script>
+    
+    <script>
+        // Check authentication on page load
+        if (!auth.isLoggedIn()) {
+            window.location.href = 'login.html';
+        }
+        
+        // Show user info in header
+        const currentUser = auth.getCurrentUser();
+        if (currentUser) {
+            const header = document.querySelector('header');
+            const userNav = document.createElement('div');
+            userNav.style.marginTop = '15px';
+            userNav.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>👋 Welcome, ${currentUser.businessName}</span>
+                    <a href="dashboard.html" style="background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 20px; color: white; text-decoration: none; margin-left: 15px;">Dashboard</a>
+                </div>
+            `;
+            header.appendChild(userNav);
+        }
+    </script>
+</body>
+</html>

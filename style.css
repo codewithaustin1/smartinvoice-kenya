@@ -1,0 +1,270 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    overflow: hidden;
+}
+
+header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px;
+    text-align: center;
+}
+
+header h1 {
+    font-size: 2em;
+    margin-bottom: 10px;
+}
+
+.pricing-banner {
+    background: #fef3c7;
+    color: #92400e;
+    padding: 12px;
+    text-align: center;
+    font-size: 0.9em;
+}
+
+form {
+    padding: 30px;
+}
+
+.form-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.form-section h2 {
+    color: #374151;
+    font-size: 1.3em;
+    margin-bottom: 20px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    color: #4b5563;
+    font-weight: 500;
+}
+
+.form-group input, .form-group textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 1em;
+    transition: border-color 0.3s;
+}
+
+.form-group input:focus, .form-group textarea:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.invoice-item {
+    display: grid;
+    grid-template-columns: 1fr 100px 120px 40px;
+    gap: 10px;
+    margin-bottom: 10px;
+    align-items: center;
+}
+
+.invoice-item input {
+    padding: 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+}
+
+.remove-item {
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    font-size: 1.2em;
+    transition: background 0.3s;
+}
+
+.remove-item:hover {
+    background: #dc2626;
+}
+
+.btn-secondary {
+    background: #6b7280;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background 0.3s;
+}
+
+.btn-secondary:hover {
+    background: #4b5563;
+}
+
+.summary {
+    background: #f9fafb;
+    padding: 20px;
+    border-radius: 12px;
+    margin: 20px 0;
+}
+
+.summary h3 {
+    margin-bottom: 15px;
+    color: #374151;
+}
+
+.summary-line {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    color: #4b5563;
+}
+
+.summary-line.total {
+    font-weight: bold;
+    font-size: 1.2em;
+    border-top: 2px solid #e5e7eb;
+    margin-top: 8px;
+    padding-top: 12px;
+    color: #111827;
+}
+
+.btn-primary {
+    width: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 14px;
+    border-radius: 10px;
+    font-size: 1.1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+}
+
+.invoice-preview {
+    padding: 30px;
+    background: #f9fafb;
+    border-top: 3px solid #667eea;
+}
+
+.invoice-preview h2 {
+    color: #374151;
+    margin-bottom: 20px;
+}
+
+#previewContent {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+
+/* M-PESA specific styling */
+.payment-method-badge {
+    display: inline-block;
+    background: #10b981;
+    color: white;
+    font-size: 0.75em;
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin-left: 8px;
+}
+
+/* Loading state for payment processing */
+.btn-primary.loading {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-primary.loading::after {
+    content: " ...";
+    animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dots {
+    0%, 20% { content: " ..."; }
+    40% { content: " .."; }
+    60% { content: " ."; }
+    80%, 100% { content: " ..."; }
+}
+
+/* Success message animation */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.invoice-preview {
+    animation: slideIn 0.5s ease-out;
+}
+
+/* M-PESA payment link styling */
+.payment-link {
+    background: #f0fdf4;
+    border: 1px solid #86efac;
+    padding: 12px;
+    border-radius: 8px;
+    font-family: monospace;
+    word-break: break-all;
+    margin: 10px 0;
+}
+
+@media (max-width: 640px) {
+    .invoice-item {
+        grid-template-columns: 1fr 80px 100px 35px;
+        gap: 5px;
+    }
+    
+    form {
+        padding: 20px;
+    }
+    
+    .summary-line {
+        font-size: 0.9em;
+    }
+    
+    .btn-primary {
+        font-size: 1em;
+        padding: 12px;
+    }
+}

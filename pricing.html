@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing - SmartInvoice Kenya</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .pricing-container {
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+        .pricing-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        .pricing-card:hover {
+            transform: translateY(-10px);
+        }
+        .pricing-card.pro {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            transform: scale(1.05);
+        }
+        .price {
+            font-size: 48px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .features {
+            list-style: none;
+            padding: 0;
+            margin: 30px 0;
+        }
+        .features li {
+            padding: 10px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .pro .features li {
+            border-bottom-color: rgba(255,255,255,0.2);
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 30px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+        .btn-free {
+            background: #e5e7eb;
+            color: #374151;
+        }
+        .btn-pro {
+            background: white;
+            color: #667eea;
+        }
+        .badge {
+            background: #10b981;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body style="background: #f3f4f6;">
+    <div class="pricing-container">
+        <div style="text-align: center;">
+            <h1>Simple, Transparent Pricing</h1>
+            <p>Start for free, upgrade when you need more</p>
+        </div>
+        
+        <div class="pricing-grid">
+            <!-- Free Plan -->
+            <div class="pricing-card">
+                <h2>Free</h2>
+                <div class="price">KES 0</div>
+                <p>per month</p>
+                <ul class="features">
+                    <li>✓ 5 invoices per month</li>
+                    <li>✓ M-PESA payments</li>
+                    <li>✓ Payment tracking</li>
+                    <li>✓ Email support</li>
+                </ul>
+                <a href="login.html" class="btn btn-free">Get Started</a>
+            </div>
+            
+            <!-- Pro Plan -->
+            <div class="pricing-card pro">
+                <div class="badge">🔥 Most Popular</div>
+                <h2>Pro</h2>
+                <div class="price">KES 1,500</div>
+                <p>per month</p>
+                <ul class="features">
+                    <li>✓ Unlimited invoices</li>
+                    <li>✓ M-PESA & Card payments</li>
+                    <li>✓ Payment tracking</li>
+                    <li>✓ Remove branding</li>
+                    <li>✓ Priority support</li>
+                </ul>
+                <a href="login.html" class="btn btn-pro">Start Free Trial</a>
+            </div>
+            
+            <!-- Business Plan -->
+            <div class="pricing-card">
+                <h2>Business</h2>
+                <div class="price">KES 4,500</div>
+                <p>per month</p>
+                <ul class="features">
+                    <li>✓ Everything in Pro</li>
+                    <li>✓ 5 team members</li>
+                    <li>✓ API access</li>
+                    <li>✓ Bulk invoicing</li>
+                    <li>✓ Dedicated support</li>
+                </ul>
+                <a href="contact.html" class="btn btn-free">Contact Sales</a>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 50px;">
+            <p style="color: #6b7280;">All plans include M-PESA and card payments via Paystack. Transaction fees apply.</p>
+        </div>
+    </div>
+</body>
+</html>
