@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
+const { connectDB, getUsersCollection, getInvoicesCollection, getSubscriptionsCollection, hashPassword } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,20 +12,15 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('.'));
 
-// Store invoices in memory (use database in production)
-const invoices = new Map();
-
 // Determine if we're in LIVE mode or TEST mode
-// LIVE keys start with 'sk_live_', TEST keys start with 'sk_test_'
 const isLiveMode = process.env.PAYSTACK_SECRET_KEY && 
                     process.env.PAYSTACK_SECRET_KEY.startsWith('sk_live_');
 const isTestMode = !isLiveMode;
 
 console.log(`💳 Paystack Mode: ${isLiveMode ? '🔴 LIVE' : '🟡 TEST'}`);
 
-// Kenyan bank codes for Paystack (CORRECTED)
+// Kenyan bank codes for Paystack
 const paystackBankCodes = {
-    // Kenyan Banks - Use Paystack's expected codes
     'KCB': '044',
     'Equity': '068',
     'Cooperative': '011',
@@ -34,26 +30,151 @@ const paystackBankCodes = {
     'NCBA': '030',
     'Diamond Trust': '063',
     'I&M': '070',
-    'Family Bank': '063',  // Family Bank uses same as DTB
-    // Add more banks as needed
-    'KCB Bank': '044',
-    'Equity Bank': '068',
-    'Cooperative Bank': '011',
-    'Absa Bank': '035',
-    'Stanbic Bank': '031',
-    'Standard Chartered Bank': '021',
-    'NCBA Bank': '030',
-    'Diamond Trust Bank': '063',
-    'I&M Bank': '070',
     'Family Bank': '063'
 };
+
+// Initialize MongoDB connection
+let dbInitialized = false;
+async function initDB() {
+    if (!dbInitialized) {
+        await connectDB();
+        dbInitialized = true;
+    }
+}
+
+// ============= USER ENDPOINTS =============
+
+// Register user in MongoDB
+app.post('/api/users/register', async (req, res) => {
+    const { email, password, businessName, businessPhone, bankName, accountNumber, accountName } = req.body;
+    
+    try {
+        await initDB();
+        const usersCollection = getUsersCollection();
+        
+        // Check if user exists
+        const existingUser = await usersCollection.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ success: false, message: 'Email already registered' });
+        }
+        
+        // Create user
+        const newUser = {
+            id: Date.now().toString(),
+            email,
+            password: hashPassword(password),
+            businessName,
+            businessPhone,
+            bankDetails: {
+                bankName,
+                accountNumber,
+                accountName,
+                subaccountCode: null
+            },
+            createdAt: new Date().toISOString(),
+            invoices: [],
+            settings: { currency: 'KES', taxRate: 0, logo: null }
+        };
+        
+        await usersCollection.insertOne(newUser);
+        
+        // Create subscription
+        const subscriptionsCollection = getSubscriptionsCollection();
+        await subscriptionsCollection.insertOne({
+            email,
+            plan: 'free',
+            startDate: new Date().toISOString(),
+            expiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            invoiceCount: 0,
+            invoiceLimit: 5
+        });
+        
+        // Remove password from response
+        const { password: _, ...userWithoutPassword } = newUser;
+        res.json({ success: true, user: userWithoutPassword });
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Login user from MongoDB
+app.post('/api/users/login', async (req, res) => {
+    const { email, password } = req.body;
+    
+    try {
+        await initDB();
+        const usersCollection = getUsersCollection();
+        const user = await usersCollection.findOne({ email });
+        
+        if (!user) {
+            return res.status(400).json({ success: false, message: 'User not found' });
+        }
+        
+        // Verify password
+        if (user.password !== hashPassword(password)) {
+            return res.status(400).json({ success: false, message: 'Invalid password' });
+        }
+        
+        // Remove password from response
+        const { password: _, ...userWithoutPassword } = user;
+        res.json({ success: true, user: userWithoutPassword });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Get user by ID
+app.get('/api/users/:id', async (req, res) => {
+    try {
+        await initDB();
+        const usersCollection = getUsersCollection();
+        const user = await usersCollection.findOne({ id: req.params.id });
+        
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+        
+        const { password: _, ...userWithoutPassword } = user;
+        res.json({ success: true, user: userWithoutPassword });
+    } catch (error) {
+        console.error('Error fetching user:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Update user subaccount
+app.post('/api/users/update-subaccount', async (req, res) => {
+    const { userId, subaccountCode } = req.body;
+    
+    try {
+        await initDB();
+        const usersCollection = getUsersCollection();
+        
+        const result = await usersCollection.updateOne(
+            { id: userId },
+            { $set: { 'bankDetails.subaccountCode': subaccountCode } }
+        );
+        
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+        
+        res.json({ success: true, message: 'Subaccount updated' });
+    } catch (error) {
+        console.error('Error updating subaccount:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// ============= PAYMENT ENDPOINTS =============
 
 // Create Paystack Subaccount for a business
 app.post('/api/create-subaccount', async (req, res) => {
     const { business_name, settlement_bank, account_number, account_name, percentage_charge, email, phone } = req.body;
     
     try {
-        // In test mode, skip subaccount creation
         if (isTestMode) {
             console.log('Test mode: Skipping subaccount creation');
             res.json({ 
@@ -64,7 +185,6 @@ app.post('/api/create-subaccount', async (req, res) => {
             return;
         }
         
-        // LIVE MODE: Create actual Paystack subaccount
         console.log(`🔴 LIVE MODE: Creating subaccount for ${business_name}`);
         console.log(`Bank: ${settlement_bank}, Account: ${account_number}`);
         
@@ -138,8 +258,6 @@ app.post('/api/initialize-payment', async (req, res) => {
         }
         
         const amountInCents = Math.round(amount * 100);
-        
-        // Get the base URL from environment
         const baseUrl = process.env.RENDER_EXTERNAL_URL || 
                        process.env.APP_URL || 
                        `http://localhost:${PORT}`;
@@ -168,8 +286,6 @@ app.post('/api/initialize-payment', async (req, res) => {
             }
         };
         
-        // CRITICAL: Only add subaccount if we have a valid one and we're in LIVE mode
-        // Paystack subaccount codes start with 'ACCT_'
         const isValidSubaccount = isLiveMode && 
                                    subaccountCode && 
                                    subaccountCode !== 'null' && 
@@ -182,13 +298,8 @@ app.post('/api/initialize-payment', async (req, res) => {
         if (isValidSubaccount) {
             requestBody.subaccount = subaccountCode;
             console.log('✅ Adding subaccount for direct business settlement:', subaccountCode);
-            console.log('💰 Payment will go directly to business bank account');
-            console.log('💸 Your 0.5% fee will be automatically deducted');
         } else if (isLiveMode) {
             console.log('⚠️ LIVE MODE: No valid subaccount - payment will go to platform account');
-            console.log('⚠️ Businesses must have subaccounts to receive direct payments');
-        } else {
-            console.log('⚠️ TEST MODE: Payment goes to platform account');
         }
         
         console.log('Sending request to Paystack...');
@@ -206,10 +317,6 @@ app.post('/api/initialize-payment', async (req, res) => {
         
         if (data.status) {
             console.log('✅ Payment link created:', data.data.authorization_url);
-            if (isValidSubaccount) {
-                console.log('🏦 Settlement will go to business bank account in 24-48 hours');
-                console.log('💸 Platform fee (0.5%) will be automatically deducted');
-            }
             res.json({ 
                 authorization_url: data.data.authorization_url, 
                 reference: data.data.reference 
@@ -231,7 +338,6 @@ app.post('/api/verify-payment', async (req, res) => {
     const { reference } = req.body;
     
     console.log('Verifying payment for reference:', reference);
-    console.log('Mode:', isLiveMode ? 'LIVE' : 'TEST');
     
     try {
         const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
@@ -245,26 +351,22 @@ app.post('/api/verify-payment', async (req, res) => {
         
         if (data.data && data.data.status === 'success') {
             const invoiceId = data.data.metadata?.invoiceId;
-            if (invoiceId && invoices.has(invoiceId)) {
-                const invoice = invoices.get(invoiceId);
-                invoice.paid = true;
-                invoice.paidAt = new Date().toISOString();
-                invoice.reference = reference;
-                invoice.paymentMethod = data.data.channel;
-                invoice.subaccount = data.data.subaccount;
-                invoices.set(invoiceId, invoice);
-                console.log(`✅ Invoice ${invoiceId} marked as paid`);
-                
-                // In LIVE mode, you might want to send email notifications
-                if (isLiveMode) {
-                    console.log(`💰 LIVE PAYMENT: KES ${invoice.total} received`);
-                    if (data.data.subaccount) {
-                        console.log(`🏦 Payment went to subaccount: ${data.data.subaccount}`);
-                        console.log(`💸 Platform fee (0.5%) automatically deducted`);
-                    } else {
-                        console.log(`⚠️ Payment went to platform account - manual settlement needed`);
+            if (invoiceId) {
+                await initDB();
+                const invoicesCollection = getInvoicesCollection();
+                await invoicesCollection.updateOne(
+                    { id: invoiceId },
+                    { 
+                        $set: { 
+                            paid: true,
+                            paidAt: new Date().toISOString(),
+                            reference: reference,
+                            paymentMethod: data.data.channel,
+                            subaccount: data.data.subaccount
+                        }
                     }
-                }
+                );
+                console.log(`✅ Invoice ${invoiceId} marked as paid in MongoDB`);
             }
             res.json({ success: true, data: data.data });
         } else {
@@ -277,35 +379,58 @@ app.post('/api/verify-payment', async (req, res) => {
     }
 });
 
-// Save invoice
-app.post('/api/save-invoice', (req, res) => {
+// Save invoice to MongoDB
+app.post('/api/save-invoice', async (req, res) => {
     const { invoice } = req.body;
     const invoiceId = crypto.randomBytes(8).toString('hex');
+    
     const newInvoice = {
         ...invoice,
         id: invoiceId,
         createdAt: new Date().toISOString(),
         paid: false
     };
-    invoices.set(invoiceId, newInvoice);
-    console.log(`✅ Invoice saved: ${invoiceId}`);
-    res.json({ success: true, invoiceId });
-});
-
-// Get invoice
-app.get('/api/invoice/:id', (req, res) => {
-    const invoice = invoices.get(req.params.id);
-    if (invoice) {
-        res.json(invoice);
-    } else {
-        res.status(404).json({ error: 'Invoice not found' });
+    
+    try {
+        await initDB();
+        const invoicesCollection = getInvoicesCollection();
+        await invoicesCollection.insertOne(newInvoice);
+        console.log(`✅ Invoice saved to MongoDB: ${invoiceId}`);
+        res.json({ success: true, invoiceId });
+    } catch (error) {
+        console.error('Error saving invoice:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
-// Get all invoices
-app.get('/api/invoices', (req, res) => {
-    const allInvoices = Array.from(invoices.values());
-    res.json(allInvoices);
+// Get invoice from MongoDB
+app.get('/api/invoice/:id', async (req, res) => {
+    try {
+        await initDB();
+        const invoicesCollection = getInvoicesCollection();
+        const invoice = await invoicesCollection.findOne({ id: req.params.id });
+        if (invoice) {
+            res.json(invoice);
+        } else {
+            res.status(404).json({ error: 'Invoice not found' });
+        }
+    } catch (error) {
+        console.error('Error fetching invoice:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get all invoices for a user
+app.get('/api/invoices/:userId', async (req, res) => {
+    try {
+        await initDB();
+        const invoicesCollection = getInvoicesCollection();
+        const invoices = await invoicesCollection.find({ userId: req.params.userId }).toArray();
+        res.json(invoices);
+    } catch (error) {
+        console.error('Error fetching invoices:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Payment callback page
@@ -315,8 +440,6 @@ app.get('/payment-callback.html', (req, res) => {
         <html>
         <head>
             <title>Payment Complete - SmartInvoice Kenya</title>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
@@ -357,7 +480,6 @@ app.get('/payment-callback.html', (req, res) => {
                 <div class="success">✓</div>
                 <h1>Payment Received!</h1>
                 <p>Your payment has been processed successfully.</p>
-                <p>You will receive a confirmation email shortly.</p>
                 <a href="/dashboard.html" class="btn">Return to Dashboard</a>
             </div>
             <script>
@@ -368,10 +490,6 @@ app.get('/payment-callback.html', (req, res) => {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ reference })
-                    }).then(() => {
-                        console.log('Payment verified');
-                    }).catch(err => {
-                        console.error('Verification failed:', err);
                     });
                 }
             </script>
@@ -380,7 +498,8 @@ app.get('/payment-callback.html', (req, res) => {
     `);
 });
 
-app.listen(PORT, () => {
+// Start server
+app.listen(PORT, async () => {
     console.log(`========================================`);
     console.log(`🚀 SmartInvoice Kenya Server Running`);
     console.log(`📍 ${process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`}`);
@@ -389,20 +508,21 @@ app.listen(PORT, () => {
     console.log(`💸 Platform fee: ${PLATFORM_FEE}%`);
     console.log(`========================================`);
     
+    // Initialize MongoDB connection
+    try {
+        await initDB();
+        console.log(`✅ MongoDB Atlas Connected`);
+    } catch (error) {
+        console.error(`❌ MongoDB Connection Failed:`, error.message);
+    }
+    
     if (isTestMode) {
         console.log(`\n📝 TEST MODE INSTRUCTIONS:`);
         console.log(`📝 Test Card: 4242 4242 4242 4242`);
-        console.log(`📝 Any future expiry date`);
-        console.log(`📝 Any CVC (e.g., 123)`);
         console.log(`📝 Test OTP: 123456\n`);
     } else {
         console.log(`\n🔴 LIVE MODE ACTIVE - Real payments will be processed`);
-        console.log(`💰 Money goes to: ${process.env.PAYSTACK_SECRET_KEY ? 'Your Paystack account' : 'Not configured'}`);
-        console.log(`⚠️ Test with small amounts first (e.g., KES 100)`);
-        console.log(`🏦 Settlement to your bank: 2-3 business days\n`);
-        console.log(`📌 SUBACCOUNT FEATURE ACTIVE:`);
-        console.log(`   - Businesses with valid subaccounts: Direct settlement`);
-        console.log(`   - Platform fee (0.5%): Automatically deducted`);
-        console.log(`   - Settlement time: 24-48 hours to business bank\n`);
+        console.log(`📌 SUBACCOUNT FEATURE ACTIVE`);
+        console.log(`📌 MONGODB DATABASE ACTIVE\n`);
     }
 });

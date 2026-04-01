@@ -439,5 +439,164 @@
         // Load dashboard when page loads
         loadDashboard();
     </script>
+
+<!-- Super Admin Panel - Hidden by default -->
+<div id="superAdminPanel" style="display: none; margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 12px; color: white;">
+    <h3>👑 Super Admin Panel</h3>
+    <p style="font-size: 0.9em;">You are logged in as: <strong id="adminEmail"></strong></p>
+    
+    <div style="background: white; color: #333; padding: 15px; border-radius: 8px; margin-top: 10px;">
+        <h4>➕ Add Subaccount to Any User</h4>
+        <div class="form-group">
+            <label>Select User</label>
+            <select id="adminSelectUser" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ddd;"></select>
+        </div>
+        <div class="form-group">
+            <label>Subaccount Code (from Paystack)</label>
+            <input type="text" id="adminSubaccountCode" placeholder="ACCT_xxxxxxxxxxxx" style="width: 100%; padding: 8px;">
+        </div>
+        <button onclick="adminUpdateAnySubaccount()" class="btn-primary" style="margin-top: 10px;">Update Subaccount for Selected User</button>
+        
+        <hr style="margin: 15px 0;">
+        
+        <h4>👥 All Users</h4>
+        <div id="adminUserList" style="max-height: 300px; overflow-y: auto;"></div>
+    </div>
+</div>
+
+<script>
+// Super Admin access - only you can see this
+// To activate, type: showSuperAdmin()
+window.showSuperAdmin = function() {
+    const currentUser = auth.getCurrentUser();
+    if (currentUser) {
+        document.getElementById('superAdminPanel').style.display = 'block';
+        document.getElementById('adminEmail').textContent = currentUser.email;
+        loadUserList();
+        loadUserSelect();
+    } else {
+        alert('Please login first');
+    }
+}
+
+function loadUserSelect() {
+    const users = auth.users;
+    const select = document.getElementById('adminSelectUser');
+    if (!users || users.length === 0) {
+        select.innerHTML = '<option>No users found</option>';
+        return;
+    }
+    
+    select.innerHTML = '<option value="">-- Select User --</option>';
+    users.forEach(user => {
+        const hasSubaccount = user.bankDetails?.subaccountCode && user.bankDetails.subaccountCode.startsWith('ACCT_');
+        select.innerHTML += `
+            <option value="${user.id}" data-email="${user.email}" data-bank="${user.bankDetails?.bankName || 'N/A'}" data-account="${user.bankDetails?.accountNumber || 'N/A'}">
+                ${user.businessName || user.email} ${hasSubaccount ? '✅' : '❌'}
+            </option>
+        `;
+    });
+}
+
+function loadUserList() {
+    const users = auth.users;
+    const userListDiv = document.getElementById('adminUserList');
+    if (!users || users.length === 0) {
+        userListDiv.innerHTML = '<p>No users found</p>';
+        return;
+    }
+    
+    userListDiv.innerHTML = '<strong>All Registered Users:</strong><br>';
+    users.forEach(user => {
+        const hasSubaccount = user.bankDetails?.subaccountCode && user.bankDetails.subaccountCode.startsWith('ACCT_');
+        const subaccountDisplay = hasSubaccount ? user.bankDetails.subaccountCode.slice(0, 10) + '...' : 'Not created';
+        userListDiv.innerHTML += `
+            <div style="border-bottom: 1px solid #ddd; padding: 12px; margin: 5px 0; background: ${hasSubaccount ? '#f0fdf4' : '#fff'}; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>🏢 ${user.businessName || 'N/A'}</strong><br>
+                        📧 ${user.email}<br>
+                        🏦 ${user.bankDetails?.bankName || 'N/A'} | 📋 ${user.bankDetails?.accountNumber || 'N/A'}<br>
+                        🔑 Subaccount: ${subaccountDisplay}
+                    </div>
+                    <div>
+                        ${!hasSubaccount ? 
+                            `<button onclick="adminPrepareForUser('${user.id}')" style="padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer;">➕ Add Subaccount</button>` : 
+                            `<span style="color: #10b981;">✅ Active</span>`
+                        }
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+}
+
+function adminPrepareForUser(userId) {
+    const user = auth.users.find(u => u.id === userId);
+    if (user) {
+        // Select the user in dropdown
+        const select = document.getElementById('adminSelectUser');
+        select.value = userId;
+        
+        // Show alert with instructions
+        alert(`📋 Create subaccount in Paystack for:\n\n🏢 Business: ${user.businessName}\n🏦 Bank: ${user.bankDetails?.bankName}\n📋 Account: ${user.bankDetails?.accountNumber}\n👤 Name: ${user.bankDetails?.accountName || user.businessName}\n\n💰 Your fee: 0.5%\n\nAfter creating, paste the ACCT_ code below and click "Update Subaccount".`);
+        
+        // Focus on the input
+        document.getElementById('adminSubaccountCode').focus();
+    }
+}
+
+function adminUpdateAnySubaccount() {
+    const userId = document.getElementById('adminSelectUser').value;
+    const subaccountCode = document.getElementById('adminSubaccountCode').value.trim();
+    
+    if (!userId) {
+        alert('Please select a user first');
+        return;
+    }
+    
+    if (!subaccountCode.startsWith('ACCT_')) {
+        alert('Subaccount code must start with ACCT_');
+        return;
+    }
+    
+    // Find the user
+    const userIndex = auth.users.findIndex(u => u.id === userId);
+    if (userIndex === -1) {
+        alert('User not found');
+        return;
+    }
+    
+    const user = auth.users[userIndex];
+    
+    // Update the user's subaccount
+    if (!user.bankDetails) {
+        user.bankDetails = {};
+    }
+    user.bankDetails.subaccountCode = subaccountCode;
+    
+    // Save changes
+    auth.saveUsers();
+    
+    // Update current user if it's the logged in one
+    if (auth.currentUser && auth.currentUser.id === userId) {
+        auth.currentUser = user;
+        localStorage.setItem('smartinvoice_currentUser', JSON.stringify(user));
+    }
+    
+    alert(`✅ Subaccount added for ${user.businessName || user.email}!\n\nPayments will now go directly to their bank account.\nYour 0.5% fee will be automatically deducted.`);
+    
+    // Refresh the display
+    loadUserList();
+    loadUserSelect();
+    document.getElementById('adminSubaccountCode').value = '';
+    
+    // If this was the current user, reload dashboard to update settlement card
+    if (auth.currentUser && auth.currentUser.id === userId) {
+        location.reload();
+    }
+}
+</script>
+
 </body>
 </html>
