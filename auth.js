@@ -10,19 +10,19 @@ class Auth {
     // Create Paystack Subaccount for business
     async createPaystackSubaccount(businessName, email, phone, bankName, accountNumber, accountName) {
         try {
-            // Map Kenyan bank names to Paystack bank codes
-            const bankCodes = {
-                'KCB': 'KCB',
-                'Equity': 'EQUITY',
-                'Cooperative': 'COOP',
-                'Absa': 'ABSA',
-                'Stanbic': 'STANBIC',
-                'Standard Chartered': 'SCB',
-                'NCBA': 'NCBA',
-                'Diamond Trust': 'DTB',
-                'I&M': 'IMB',
-                'Family Bank': 'FAMILY'
-            };
+            // Map Kenyan bank names to Paystack bank codes (CORRECTED)
+const bankCodes = {
+    'KCB': '044',
+    'Equity': '068',
+    'Cooperative': '011',
+    'Absa': '035',
+    'Stanbic': '031',
+    'Standard Chartered': '021',
+    'NCBA': '030',
+    'Diamond Trust': '063',
+    'I&M': '070',
+    'Family Bank': '063'
+};
             
             const bankCode = bankCodes[bankName] || bankName;
             
@@ -216,15 +216,18 @@ class Auth {
     }
 
     // Get user's Paystack subaccount code (returns null if not available)
-    getSubaccountCode() {
-        if (!this.currentUser) return null;
-        const code = this.currentUser.bankDetails?.subaccountCode;
-        // Only return if it's a valid-looking subaccount code (starts with ACCT_ or similar)
-        if (code && code !== 'SUB_ACCOUNT_PLACEHOLDER' && code !== 'null' && code !== 'undefined') {
-            return code;
-        }
-        return null;
+getSubaccountCode() {
+    if (!this.currentUser) return null;
+    const code = this.currentUser.bankDetails?.subaccountCode;
+    // Paystack subaccount codes start with 'ACCT_' and are 10+ characters
+    // Only return valid subaccount codes, not placeholders
+    if (code && code !== 'SUB_ACCOUNT_PLACEHOLDER' && 
+        code !== 'null' && code !== 'undefined' && 
+        code.startsWith('ACCT_') && code.length > 10) {
+        return code;
     }
+    return null;
+}
 
     // Get user subscription status
     getSubscription() {

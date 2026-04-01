@@ -14,13 +14,47 @@ app.use(express.static('.'));
 // Store invoices in memory (use database in production)
 const invoices = new Map();
 
+// Determine if we're in LIVE mode or TEST mode
+// LIVE keys start with 'sk_live_', TEST keys start with 'sk_test_'
+const isLiveMode = process.env.PAYSTACK_SECRET_KEY && 
+                    process.env.PAYSTACK_SECRET_KEY.startsWith('sk_live_');
+const isTestMode = !isLiveMode;
+
+console.log(`💳 Paystack Mode: ${isLiveMode ? '🔴 LIVE' : '🟡 TEST'}`);
+
+// Kenyan bank codes for Paystack (CORRECTED)
+const paystackBankCodes = {
+    // Kenyan Banks - Use Paystack's expected codes
+    'KCB': '044',
+    'Equity': '068',
+    'Cooperative': '011',
+    'Absa': '035',
+    'Stanbic': '031',
+    'Standard Chartered': '021',
+    'NCBA': '030',
+    'Diamond Trust': '063',
+    'I&M': '070',
+    'Family Bank': '063',  // Family Bank uses same as DTB
+    // Add more banks as needed
+    'KCB Bank': '044',
+    'Equity Bank': '068',
+    'Cooperative Bank': '011',
+    'Absa Bank': '035',
+    'Stanbic Bank': '031',
+    'Standard Chartered Bank': '021',
+    'NCBA Bank': '030',
+    'Diamond Trust Bank': '063',
+    'I&M Bank': '070',
+    'Family Bank': '063'
+};
+
 // Create Paystack Subaccount for a business
 app.post('/api/create-subaccount', async (req, res) => {
     const { business_name, settlement_bank, account_number, account_name, percentage_charge, email, phone } = req.body;
     
     try {
-        // For test mode, skip subaccount creation
-        if (!process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY.includes('test')) {
+        // In test mode, skip subaccount creation
+        if (isTestMode) {
             console.log('Test mode: Skipping subaccount creation');
             res.json({ 
                 success: true, 
@@ -30,6 +64,12 @@ app.post('/api/create-subaccount', async (req, res) => {
             return;
         }
         
+        // LIVE MODE: Create actual Paystack subaccount
+        console.log(`🔴 LIVE MODE: Creating subaccount for ${business_name}`);
+        console.log(`Bank: ${settlement_bank}, Account: ${account_number}`);
+        
+        const bankCode = paystackBankCodes[settlement_bank] || settlement_bank;
+        
         const response = await fetch('https://api.paystack.co/subaccount', {
             method: 'POST',
             headers: {
@@ -38,7 +78,7 @@ app.post('/api/create-subaccount', async (req, res) => {
             },
             body: JSON.stringify({
                 business_name: business_name,
-                settlement_bank: settlement_bank,
+                settlement_bank: bankCode,
                 account_number: account_number,
                 account_name: account_name,
                 percentage_charge: percentage_charge,
@@ -54,13 +94,14 @@ app.post('/api/create-subaccount', async (req, res) => {
         const data = await response.json();
         
         if (data.status) {
+            console.log(`✅ Subaccount created: ${data.data.subaccount_code}`);
             res.json({ 
                 success: true, 
                 subaccount_code: data.data.subaccount_code,
                 message: 'Subaccount created successfully'
             });
         } else {
-            console.error('Paystack subaccount error:', data);
+            console.error('❌ Paystack subaccount error:', data);
             res.json({ 
                 success: false, 
                 subaccount_code: null,
@@ -68,7 +109,7 @@ app.post('/api/create-subaccount', async (req, res) => {
             });
         }
     } catch (error) {
-        console.error('Server error:', error);
+        console.error('❌ Server error:', error);
         res.json({ 
             success: false, 
             subaccount_code: null,
@@ -82,6 +123,7 @@ app.post('/api/initialize-payment', async (req, res) => {
     const { email, phone, amount, invoiceId, subaccountCode } = req.body;
     
     console.log('=== Payment Initialization Request ===');
+    console.log('Mode:', isLiveMode ? '🔴 LIVE' : '🟡 TEST');
     console.log('Email:', email);
     console.log('Amount:', amount);
     console.log('Invoice ID:', invoiceId);
@@ -97,8 +139,10 @@ app.post('/api/initialize-payment', async (req, res) => {
         
         const amountInCents = Math.round(amount * 100);
         
-        // Get the base URL from environment or use localhost for development
-        const baseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+        // Get the base URL from environment
+        const baseUrl = process.env.RENDER_EXTERNAL_URL || 
+                       process.env.APP_URL || 
+                       `http://localhost:${PORT}`;
         
         const requestBody = {
             email: email,
@@ -124,19 +168,27 @@ app.post('/api/initialize-payment', async (req, res) => {
             }
         };
         
-        // Only add subaccount if we have a valid one
-        const isValidSubaccount = subaccountCode && 
+        // CRITICAL: Only add subaccount if we have a valid one and we're in LIVE mode
+        // Paystack subaccount codes start with 'ACCT_'
+        const isValidSubaccount = isLiveMode && 
+                                   subaccountCode && 
                                    subaccountCode !== 'null' && 
                                    subaccountCode !== 'undefined' && 
                                    subaccountCode !== '' &&
-                                   subaccountCode !== 'SUB_ACCOUNT_PLACEHOLDER' &&
-                                   !subaccountCode.includes('PLACEHOLDER');
+                                   !subaccountCode.includes('PLACEHOLDER') &&
+                                   !subaccountCode.includes('TEST') &&
+                                   subaccountCode.startsWith('ACCT_');
         
         if (isValidSubaccount) {
             requestBody.subaccount = subaccountCode;
-            console.log('✅ Adding subaccount:', subaccountCode);
+            console.log('✅ Adding subaccount for direct business settlement:', subaccountCode);
+            console.log('💰 Payment will go directly to business bank account');
+            console.log('💸 Your 0.5% fee will be automatically deducted');
+        } else if (isLiveMode) {
+            console.log('⚠️ LIVE MODE: No valid subaccount - payment will go to platform account');
+            console.log('⚠️ Businesses must have subaccounts to receive direct payments');
         } else {
-            console.log('⚠️ No valid subaccount - payment goes to platform account');
+            console.log('⚠️ TEST MODE: Payment goes to platform account');
         }
         
         console.log('Sending request to Paystack...');
@@ -153,7 +205,11 @@ app.post('/api/initialize-payment', async (req, res) => {
         const data = await response.json();
         
         if (data.status) {
-            console.log('✅ Payment link created');
+            console.log('✅ Payment link created:', data.data.authorization_url);
+            if (isValidSubaccount) {
+                console.log('🏦 Settlement will go to business bank account in 24-48 hours');
+                console.log('💸 Platform fee (0.5%) will be automatically deducted');
+            }
             res.json({ 
                 authorization_url: data.data.authorization_url, 
                 reference: data.data.reference 
@@ -175,6 +231,7 @@ app.post('/api/verify-payment', async (req, res) => {
     const { reference } = req.body;
     
     console.log('Verifying payment for reference:', reference);
+    console.log('Mode:', isLiveMode ? 'LIVE' : 'TEST');
     
     try {
         const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
@@ -194,10 +251,20 @@ app.post('/api/verify-payment', async (req, res) => {
                 invoice.paidAt = new Date().toISOString();
                 invoice.reference = reference;
                 invoice.paymentMethod = data.data.channel;
+                invoice.subaccount = data.data.subaccount;
                 invoices.set(invoiceId, invoice);
                 console.log(`✅ Invoice ${invoiceId} marked as paid`);
                 
-                // Update user's invoice in localStorage (client will refresh)
+                // In LIVE mode, you might want to send email notifications
+                if (isLiveMode) {
+                    console.log(`💰 LIVE PAYMENT: KES ${invoice.total} received`);
+                    if (data.data.subaccount) {
+                        console.log(`🏦 Payment went to subaccount: ${data.data.subaccount}`);
+                        console.log(`💸 Platform fee (0.5%) automatically deducted`);
+                    } else {
+                        console.log(`⚠️ Payment went to platform account - manual settlement needed`);
+                    }
+                }
             }
             res.json({ success: true, data: data.data });
         } else {
@@ -316,15 +383,26 @@ app.get('/payment-callback.html', (req, res) => {
 app.listen(PORT, () => {
     console.log(`========================================`);
     console.log(`🚀 SmartInvoice Kenya Server Running`);
-    console.log(`📍 http://localhost:${PORT}`);
+    console.log(`📍 ${process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`}`);
     console.log(`💰 Currency: Kenyan Shillings (KES)`);
-    console.log(`💳 Paystack Key: ${process.env.PAYSTACK_SECRET_KEY ? '✓ Configured' : '✗ Missing'}`);
+    console.log(`💳 Mode: ${isLiveMode ? '🔴 LIVE' : '🟡 TEST'}`);
     console.log(`💸 Platform fee: ${PLATFORM_FEE}%`);
     console.log(`========================================`);
-    console.log(`\n📝 Test Card: 4242 4242 4242 4242`);
-    console.log(`📝 Any future expiry date`);
-    console.log(`📝 Any CVC (e.g., 123)`);
-    console.log(`📝 Test OTP: 123456`);
-    console.log(`\n⚠️ Note: In test mode, payments go to your platform account`);
-    console.log(`⚠️ Subaccount feature requires live keys and verification\n`);
+    
+    if (isTestMode) {
+        console.log(`\n📝 TEST MODE INSTRUCTIONS:`);
+        console.log(`📝 Test Card: 4242 4242 4242 4242`);
+        console.log(`📝 Any future expiry date`);
+        console.log(`📝 Any CVC (e.g., 123)`);
+        console.log(`📝 Test OTP: 123456\n`);
+    } else {
+        console.log(`\n🔴 LIVE MODE ACTIVE - Real payments will be processed`);
+        console.log(`💰 Money goes to: ${process.env.PAYSTACK_SECRET_KEY ? 'Your Paystack account' : 'Not configured'}`);
+        console.log(`⚠️ Test with small amounts first (e.g., KES 100)`);
+        console.log(`🏦 Settlement to your bank: 2-3 business days\n`);
+        console.log(`📌 SUBACCOUNT FEATURE ACTIVE:`);
+        console.log(`   - Businesses with valid subaccounts: Direct settlement`);
+        console.log(`   - Platform fee (0.5%): Automatically deducted`);
+        console.log(`   - Settlement time: 24-48 hours to business bank\n`);
+    }
 });
