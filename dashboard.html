@@ -311,121 +311,130 @@
             }
         }
         
-        function loadDashboard() {
-            if (!auth.isLoggedIn()) {
-                window.location.href = 'login.html';
-                return;
-            }
-            
-            currentUser = auth.getCurrentUser();
-            document.getElementById('userName').textContent = currentUser.businessName;
-            
-            // Load subscription info
-            const subscription = auth.getSubscription();
-            const subscriptionCard = document.getElementById('subscriptionCard');
-            
-            if (subscription && subscription.plan === 'free') {
-                const remainingInvoices = subscription.invoiceLimit - (subscription.invoiceCount || 0);
-                subscriptionCard.innerHTML = `
-                    <h3>🎉 Free Trial Active</h3>
-                    <p>You're on the Free plan. <strong>${remainingInvoices}</strong> of ${subscription.invoiceLimit} invoices remaining this month.</p>
-                    ${(subscription.invoiceCount || 0) >= subscription.invoiceLimit ? 
-                        '<p style="color: #fef3c7;">⚠️ You\'ve reached your limit! Upgrade to continue creating invoices.</p>' : 
-                        ''}
-                    <button class="upgrade-btn" onclick="window.location.href='pricing.html'">🚀 Upgrade to Pro (KES 1,500/month)</button>
-                    <p style="font-size: 0.9em; margin-top: 10px;">Trial expires: ${new Date(subscription.expiry).toLocaleDateString()}</p>
-                `;
-            } else if (subscription && subscription.plan === 'pro') {
-                subscriptionCard.innerHTML = `
-                    <h3>🚀 Pro Plan Active</h3>
-                    <p>You have unlimited invoices! Keep growing your business.</p>
-                    <p style="font-size: 0.9em;">Next billing: ${new Date(subscription.expiry).toLocaleDateString()}</p>
-                `;
-            } else {
-                subscriptionCard.innerHTML = `
-                    <h3>📋 No Active Plan</h3>
-                    <p>Please upgrade to start creating invoices.</p>
-                    <button class="upgrade-btn" onclick="window.location.href='pricing.html'">View Plans</button>
-                `;
-            }
-            
-            // Load settlement info
-            const settlementCard = document.getElementById('settlementCard');
-            const subaccountCode = auth.getSubaccountCode();
-            const bankDetails = currentUser.bankDetails;
-            
-            if (subaccountCode && bankDetails) {
-                settlementCard.innerHTML = `
-                    <h3>💰 Payment Settlement Information</h3>
-                    <p><strong>✅ Payments go directly to your bank account</strong></p>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px;">
-                        <div>
-                            <strong>🏦 Bank:</strong> ${bankDetails.bankName}
-                        </div>
-                        <div>
-                            <strong>📋 Account:</strong> ${bankDetails.accountNumber}
-                        </div>
-                        <div>
-                            <strong>👤 Account Name:</strong> ${bankDetails.accountName}
-                        </div>
-                        <div>
-                            <strong>🔑 Subaccount:</strong> ${subaccountCode.slice(0, 10)}...
-                        </div>
-                    </div>
-                    <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.2);">
-                        <p style="font-size: 0.85em;">
-                            💸 <strong>Fees:</strong> Paystack fees (1.5% M-PESA / 2.9%+KES20 cards) + Platform fee (0.5%)<br>
-                            ⏱️ <strong>Settlement:</strong> 24-48 hours to your bank account<br>
-                            📊 <strong>Track payments:</strong> Check "Paid" status in invoices below
-                        </p>
-                    </div>
-                `;
-            } else {
-                settlementCard.innerHTML = `
-                    <h3>⚠️ Payment Settlement Not Configured</h3>
-                    <p>Your bank details are missing. Please contact support to update your settlement information.</p>
-                    <button class="upgrade-btn" onclick="alert('Contact support: support@smartinvoice.co.ke')" style="background: white; color: #059669;">Contact Support</button>
-                `;
-            }
-            
-            // Load invoices
-            const invoices = auth.getUserInvoices();
-            const totalInvoices = invoices.length;
-            const paidInvoices = invoices.filter(inv => inv.paid).length;
-            const totalCollected = invoices
-                .filter(inv => inv.paid)
-                .reduce((sum, inv) => sum + (inv.total || 0), 0);
-            
-            document.getElementById('totalInvoices').textContent = totalInvoices;
-            document.getElementById('totalCollected').textContent = `KES ${totalCollected.toLocaleString()}`;
-            document.getElementById('pendingPayments').textContent = totalInvoices - paidInvoices;
-            
-            // Render invoices table
-            const tbody = document.getElementById('invoicesList');
-            if (invoices.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">📄 No invoices yet. Click the + button to create your first invoice!</td></tr>';
-            } else {
-                tbody.innerHTML = invoices.slice().reverse().slice(0, 20).map(inv => `
-                    <tr>
-                        <td><strong>#${inv.id.slice(0, 8).toUpperCase()}</strong></td>
-                        <td>${inv.clientName || 'N/A'}</td>
-                        <td>KES ${(inv.total || 0).toLocaleString()}</td>
-                        <td>${new Date(inv.createdAt).toLocaleDateString()}</td>
-                        <td class="${inv.paid ? 'status-paid' : 'status-pending'}">
-                            ${inv.paid ? '✓ Paid' : '⏳ Pending'}
-                        </td>
-                        <td style="font-size: 0.85em;">
-                            ${inv.paid ? 
-                                '<span style="color: #059669;">✓ Settling to bank</span>' : 
-                                '<span style="color: #6b7280;">-</span>'}
-                        </td>
-                        <td>
-                            ${!inv.paid ? `<button onclick="resendPaymentLink('${inv.id}')" class="btn-small">📤 Resend Link</button>` : '-'}
-                        </td>
-                    </tr>
-                `).join('');
-            }
-        }
+       function loadDashboard() {
+    if (!auth.isLoggedIn()) {
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    currentUser = auth.getCurrentUser();
+    document.getElementById('userName').textContent = currentUser.businessName;
+    
+    // Load subscription info
+    const subscription = auth.getSubscription();
+    const subscriptionCard = document.getElementById('subscriptionCard');
+    
+    if (subscription && subscription.plan === 'free') {
+        const remainingInvoices = subscription.invoiceLimit - (subscription.invoiceCount || 0);
+        subscriptionCard.innerHTML = `
+            <h3>🎉 Free Trial Active</h3>
+            <p>You're on the Free plan. <strong>${remainingInvoices}</strong> of ${subscription.invoiceLimit} invoices remaining this month.</p>
+            ${(subscription.invoiceCount || 0) >= subscription.invoiceLimit ? 
+                '<p style="color: #fef3c7;">⚠️ You\'ve reached your limit! Upgrade to continue creating invoices.</p>' : 
+                ''}
+            <button class="upgrade-btn" onclick="window.location.href='pricing.html'">🚀 Upgrade to Pro (KES 1,500/month)</button>
+            <p style="font-size: 0.9em; margin-top: 10px;">Trial expires: ${new Date(subscription.expiry).toLocaleDateString()}</p>
+        `;
+    } else if (subscription && subscription.plan === 'pro') {
+        subscriptionCard.innerHTML = `
+            <h3>🚀 Pro Plan Active</h3>
+            <p>You have unlimited invoices! Keep growing your business.</p>
+            <p style="font-size: 0.9em;">Next billing: ${new Date(subscription.expiry).toLocaleDateString()}</p>
+        `;
+    } else {
+        subscriptionCard.innerHTML = `
+            <h3>📋 No Active Plan</h3>
+            <p>Please upgrade to start creating invoices.</p>
+            <button class="upgrade-btn" onclick="window.location.href='pricing.html'">View Plans</button>
+        `;
+    }
+    
+    // ========== UPDATED SETTLEMENT INFO SECTION ==========
+    // Load settlement info with subaccount validation
+    const settlementCard = document.getElementById('settlementCard');
+    const subaccountCode = auth.getSubaccountCode();
+    const bankDetails = currentUser.bankDetails;
+    
+    // Check if subaccount is valid (Paystack subaccounts start with ACCT_)
+    const isSubaccountValid = subaccountCode && 
+                               subaccountCode.startsWith('ACCT_') && 
+                               subaccountCode !== 'null' && 
+                               subaccountCode !== 'undefined' &&
+                               subaccountCode.length > 10;
+    
+    if (subaccountCode && bankDetails) {
+        settlementCard.innerHTML = `
+            <h3>💰 Payment Settlement Information</h3>
+            <p><strong>${isSubaccountValid ? '✅ Payments go directly to your bank account' : '⚠️ Manual settlement required'}</strong></p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px;">
+                <div>
+                    <strong>🏦 Bank:</strong> ${bankDetails.bankName}
+                </div>
+                <div>
+                    <strong>📋 Account:</strong> ${bankDetails.accountNumber}
+                </div>
+                <div>
+                    <strong>👤 Account Name:</strong> ${bankDetails.accountName}
+                </div>
+                <div>
+                    <strong>🔑 Subaccount:</strong> ${isSubaccountValid ? subaccountCode.slice(0, 10) + '...' : 'Not created'}
+                </div>
+            </div>
+            <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.2);">
+                <p style="font-size: 0.85em;">
+                    💸 <strong>Fees:</strong> Paystack fees (1.5% M-PESA / 2.9%+KES20 cards) + Platform fee (0.5%)<br>
+                    ⏱️ <strong>Settlement:</strong> ${isSubaccountValid ? '24-48 hours to your bank account' : 'Manual settlement required - contact platform'}<br>
+                    ${isSubaccountValid ? '✅ Automatic: Your 0.5% fee is deducted automatically' : '⚠️ Manual: Platform will send payouts separately'}
+                </p>
+            </div>
+        `;
+    } else {
+        settlementCard.innerHTML = `
+            <h3>⚠️ Payment Settlement Not Configured</h3>
+            <p>Your bank details are missing. Please update your profile to receive payments directly to your bank account.</p>
+            <button class="upgrade-btn" onclick="alert('Please contact support to update your bank details. Email: support@smartinvoice.co.ke')" style="background: white; color: #059669;">Update Bank Details</button>
+        `;
+    }
+    // ========== END UPDATED SETTLEMENT INFO SECTION ==========
+    
+    // Load invoices
+    const invoices = auth.getUserInvoices();
+    const totalInvoices = invoices.length;
+    const paidInvoices = invoices.filter(inv => inv.paid).length;
+    const totalCollected = invoices
+        .filter(inv => inv.paid)
+        .reduce((sum, inv) => sum + (inv.total || 0), 0);
+    
+    document.getElementById('totalInvoices').textContent = totalInvoices;
+    document.getElementById('totalCollected').textContent = `KES ${totalCollected.toLocaleString()}`;
+    document.getElementById('pendingPayments').textContent = totalInvoices - paidInvoices;
+    
+    // Render invoices table
+    const tbody = document.getElementById('invoicesList');
+    if (invoices.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">📄 No invoices yet. Click the + button to create your first invoice!</td></tr>';
+    } else {
+        tbody.innerHTML = invoices.slice().reverse().slice(0, 20).map(inv => `
+            <tr>
+                <td><strong>#${inv.id.slice(0, 8).toUpperCase()}</strong></td>
+                <td>${inv.clientName || 'N/A'}</td>
+                <td>KES ${(inv.total || 0).toLocaleString()}</td>
+                <td>${new Date(inv.createdAt).toLocaleDateString()}</td>
+                <td class="${inv.paid ? 'status-paid' : 'status-pending'}">
+                    ${inv.paid ? '✓ Paid' : '⏳ Pending'}
+                </td>
+                <td style="font-size: 0.85em;">
+                    ${inv.paid ? 
+                        '<span style="color: #059669;">✓ Settling to bank</span>' : 
+                        '<span style="color: #6b7280;">-</span>'}
+                </td>
+                <td>
+                    ${!inv.paid ? `<button onclick="resendPaymentLink('${inv.id}')" class="btn-small">📤 Resend Link</button>` : '-'}
+                </td>
+            </tr>
+        `).join('');
+    }
+}
         
         // Load dashboard when page loads
         loadDashboard();
