@@ -324,13 +324,19 @@
         }
         
         // Handle Login
-        document.getElementById('loginForm').addEventListener('submit', (e) => {
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const email = document.getElementById('loginEmail').value;
             const password = document.getElementById('loginPassword').value;
             
-            const result = auth.login(email, password);
+            // Show loading state
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Logging in...';
+            submitBtn.disabled = true;
+            
+            const result = await auth.login(email, password);
             
             if (result.success) {
                 showAlert(result.message, 'success');
@@ -339,14 +345,15 @@
                 }, 1000);
             } else {
                 showAlert(result.message, 'error');
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
             }
         });
         
-        // Handle Registration - FIXED VERSION
+        // Handle Registration
         document.getElementById('registerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            // Get form values
             const businessName = document.getElementById('regBusinessName').value.trim();
             const email = document.getElementById('regEmail').value.trim();
             const phone = document.getElementById('regPhone').value.trim();
@@ -392,22 +399,10 @@
             submitBtn.classList.add('loading-btn');
             
             try {
-                console.log('Attempting registration with:', {
-                    businessName, email, phone, bankName, accountNumber, accountName
-                });
-                
-                // Register with bank details
                 const result = await auth.register(
-                    email, 
-                    password, 
-                    businessName, 
-                    phone, 
-                    bankName, 
-                    accountNumber, 
-                    accountName
+                    email, password, businessName, phone, 
+                    bankName, accountNumber, accountName
                 );
-                
-                console.log('Registration result:', result);
                 
                 if (result.success) {
                     showAlert(result.message, 'success');
@@ -422,7 +417,7 @@
                 }
             } catch (error) {
                 console.error('Registration error:', error);
-                showAlert('Registration failed: ' + error.message, 'error');
+                showAlert('Registration failed. Please try again.', 'error');
                 submitBtn.textContent = originalText;
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('loading-btn');

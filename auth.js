@@ -1,11 +1,68 @@
-// Authentication System for SmartInvoice Kenya with MongoDB
+// Authentication System for SmartInvoice Kenya with JWT Tokens
 class Auth {
     constructor() {
-        this.currentUser = JSON.parse(localStorage.getItem('smartinvoice_currentUser') || 'null');
+        // Try to restore session from localStorage
+        const storedToken = localStorage.getItem('smartinvoice_token');
+        const storedUser = localStorage.getItem('smartinvoice_currentUser');
+        
+        this.token = storedToken || null;
+        this.currentUser = storedUser ? JSON.parse(storedUser) : null;
+        this.refreshToken = localStorage.getItem('smartinvoice_refreshToken') || null;
         this.platformFee = 0.5;
+        
+        console.log('🔐 Auth initialized. User:', this.currentUser?.email || 'Not logged in');
+        console.log('🔐 Token present:', !!this.token);
     }
 
-    // Register new business - MongoDB version
+    // Get authorization header for API calls
+    getAuthHeader() {
+        if (!this.token) {
+            return {};
+        }
+        return {
+            'Authorization': `Bearer ${this.token}`
+        };
+    }
+
+    // Refresh the JWT token
+    async refreshSession() {
+        if (!this.refreshToken) {
+            console.log('No refresh token available');
+            return false;
+        }
+        
+        try {
+            const response = await fetch('/api/users/refresh', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refreshToken: this.refreshToken })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.token = result.token;
+                this.refreshToken = result.refreshToken;
+                this.currentUser = result.user;
+                
+                localStorage.setItem('smartinvoice_token', this.token);
+                localStorage.setItem('smartinvoice_refreshToken', this.refreshToken);
+                localStorage.setItem('smartinvoice_currentUser', JSON.stringify(this.currentUser));
+                
+                console.log('✅ Session refreshed successfully');
+                return true;
+            } else {
+                this.logout();
+                return false;
+            }
+        } catch (error) {
+            console.error('Session refresh error:', error);
+            this.logout();
+            return false;
+        }
+    }
+
+    // Register new business - JWT version
     async register(email, password, businessName, businessPhone, bankName, accountNumber, accountName) {
         // Validate inputs
         const emailRegex = /^[^\s@]+@([^\s@]+\.)+[^\s@]+$/;
@@ -39,8 +96,14 @@ class Auth {
             const result = await response.json();
             
             if (result.success) {
-                localStorage.setItem('smartinvoice_currentUser', JSON.stringify(result.user));
+                // Store token and user data
+                this.token = result.token;
+                this.refreshToken = result.refreshToken;
                 this.currentUser = result.user;
+                
+                localStorage.setItem('smartinvoice_token', this.token);
+                localStorage.setItem('smartinvoice_refreshToken', this.refreshToken);
+                localStorage.setItem('smartinvoice_currentUser', JSON.stringify(result.user));
                 
                 return {
                     success: true,
@@ -56,8 +119,10 @@ class Auth {
         }
     }
 
-    // Login user - MongoDB version
+    // Login user - JWT version
     async login(email, password) {
+        console.log('🔐 Login attempt:', email);
+        
         try {
             const response = await fetch('/api/users/login', {
                 method: 'POST',
@@ -68,8 +133,17 @@ class Auth {
             const result = await response.json();
             
             if (result.success) {
+                // Store token and user data
+                this.token = result.token;
+                this.refreshToken = result.refreshToken;
                 this.currentUser = result.user;
+                
+                localStorage.setItem('smartinvoice_token', this.token);
+                localStorage.setItem('smartinvoice_refreshToken', this.refreshToken);
                 localStorage.setItem('smartinvoice_currentUser', JSON.stringify(result.user));
+                
+                console.log('✅ Login successful, token stored');
+                
                 return {
                     success: true,
                     message: 'Login successful!',
@@ -84,21 +158,53 @@ class Auth {
         }
     }
 
-    // Logout user
-    logout() {
+    // Logout user - JWT version
+    async logout() {
+        console.log('🔐 Logging out user:', this.currentUser?.email);
+        
+        try {
+            if (this.refreshToken) {
+                await fetch('/api/users/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...this.getAuthHeader()
+                    },
+                    body: JSON.stringify({ refreshToken: this.refreshToken })
+                });
+            }
+        } catch (error) {
+            console.error('Logout API error:', error);
+        }
+        
+        // Clear local storage
+        this.token = null;
+        this.refreshToken = null;
         this.currentUser = null;
+        
+        localStorage.removeItem('smartinvoice_token');
+        localStorage.removeItem('smartinvoice_refreshToken');
         localStorage.removeItem('smartinvoice_currentUser');
+        
+        console.log('🔐 Logout complete');
         return { success: true, message: 'Logged out successfully' };
     }
 
     // Check if user is logged in
     isLoggedIn() {
-        return this.currentUser !== null;
+        const isLoggedIn = this.token !== null && this.currentUser !== null;
+        console.log('🔐 isLoggedIn check:', isLoggedIn);
+        return isLoggedIn;
     }
 
     // Get current user
     getCurrentUser() {
         return this.currentUser;
+    }
+
+    // Get auth token for API calls
+    getToken() {
+        return this.token;
     }
 
     // Get user's Paystack subaccount code
@@ -112,35 +218,12 @@ class Auth {
         return null;
     }
 
-    // Get user subscription status - from server
-    async fetchSubscription() {
-        if (!this.currentUser) return null;
-        
-        try {
-            const response = await fetch(`/api/users/${this.currentUser.id}/subscription`);
-            const result = await response.json();
-            if (result.success) {
-                return result.subscription;
-            }
-        } catch (error) {
-            console.error('Error fetching subscription:', error);
-        }
-        
-        // Fallback to local
-        return {
-            plan: 'free',
-            invoiceLimit: 5,
-            active: true,
-            expiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            invoiceCount: this.currentUser.invoices?.length || 0
-        };
-    }
-
     // Get user subscription (sync version for UI)
     getSubscription() {
         if (!this.currentUser) return null;
         
         // For now, return free plan
+        // In production, fetch from server
         return {
             plan: 'free',
             invoiceLimit: 5,
@@ -177,7 +260,7 @@ class Auth {
         // Will be handled by MongoDB when invoice is saved
     }
 
-    // Save user's invoice
+    // Save user's invoice (local cache)
     saveInvoiceToUser(invoiceId, invoiceData) {
         if (!this.currentUser) return;
         

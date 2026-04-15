@@ -1,13 +1,23 @@
 const { MongoClient } = require('mongodb');
+const bcrypt = require('bcrypt');
 
 // MongoDB Connection URL from environment variable
 const uri = process.env.MONGODB_URI;
 let client = null;
 let db = null;
 
+// Salt rounds for bcrypt password hashing
+const SALT_ROUNDS = 10;
+
 // Connect to MongoDB
 async function connectDB() {
     try {
+        if (!uri) {
+            throw new Error('MONGODB_URI is not defined in environment variables');
+        }
+        
+        console.log('📡 Attempting to connect to MongoDB Atlas...');
+        
         if (!db) {
             client = new MongoClient(uri);
             await client.connect();
@@ -19,7 +29,8 @@ async function connectDB() {
         }
         return db;
     } catch (error) {
-        console.error('❌ MongoDB Connection Error:', error);
+        console.error('❌ MongoDB Connection Error:', error.message);
+        console.error('Please check your MONGODB_URI in .env file');
         throw error;
     }
 }
@@ -30,11 +41,19 @@ async function createIndexes() {
         const usersCollection = db.collection('users');
         await usersCollection.createIndex({ email: 1 }, { unique: true });
         await usersCollection.createIndex({ businessName: 1 });
+        await usersCollection.createIndex({ id: 1 }, { unique: true });
         
         const invoicesCollection = db.collection('invoices');
         await invoicesCollection.createIndex({ userId: 1 });
         await invoicesCollection.createIndex({ createdAt: -1 });
         await invoicesCollection.createIndex({ id: 1 }, { unique: true });
+        
+        const subscriptionsCollection = db.collection('subscriptions');
+        await subscriptionsCollection.createIndex({ email: 1 }, { unique: true });
+        
+        const refreshTokensCollection = db.collection('refresh_tokens');
+        await refreshTokensCollection.createIndex({ userId: 1 });
+        await refreshTokensCollection.createIndex({ createdAt: 1 }, { expireAfterSeconds: 2592000 }); // 30 days TTL
         
         console.log('✅ Database indexes created');
     } catch (error) {
@@ -58,15 +77,50 @@ function getSubscriptionsCollection() {
     return db.collection('subscriptions');
 }
 
-// Simple hash function (temporary - use bcrypt in production)
-function hashPassword(password) {
-    let hash = 0;
-    for (let i = 0; i < password.length; i++) {
-        const char = password.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash;
+function getRefreshTokensCollection() {
+    if (!db) throw new Error('Database not connected');
+    return db.collection('refresh_tokens');
+}
+
+// Hash password using bcrypt
+async function hashPassword(password) {
+    try {
+        const salt = await bcrypt.genSalt(SALT_ROUNDS);
+        const hash = await bcrypt.hash(password, salt);
+        return hash;
+    } catch (error) {
+        console.error('Password hashing error:', error);
+        throw error;
     }
-    return hash.toString();
+}
+
+// Verify password against hash
+async function verifyPassword(password, hash) {
+    try {
+        return await bcrypt.compare(password, hash);
+    } catch (error) {
+        console.error('Password verification error:', error);
+        return false;
+    }
+}
+
+// Migrate old simple hash to bcrypt (for existing users)
+async function migratePasswordIfNeeded(user, plainPassword) {
+    // Check if password looks like old simple hash (numeric only)
+    const isOldHash = /^\d+$/.test(user.password);
+    
+    if (isOldHash) {
+        console.log(`🔄 Migrating password for user: ${user.email}`);
+        const newHash = await hashPassword(plainPassword);
+        const usersCollection = getUsersCollection();
+        await usersCollection.updateOne(
+            { id: user.id },
+            { $set: { password: newHash, passwordMigrated: true } }
+        );
+        return newHash;
+    }
+    
+    return user.password;
 }
 
 // Close connection
@@ -82,6 +136,9 @@ module.exports = {
     getUsersCollection,
     getInvoicesCollection,
     getSubscriptionsCollection,
+    getRefreshTokensCollection,
     hashPassword,
+    verifyPassword,
+    migratePasswordIfNeeded,
     closeDB
 };

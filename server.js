@@ -2,7 +2,18 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
-const { connectDB, getUsersCollection, getInvoicesCollection, getSubscriptionsCollection, hashPassword } = require('./db');
+const { 
+    connectDB, 
+    getUsersCollection, 
+    getInvoicesCollection, 
+    getSubscriptionsCollection,
+    getRefreshTokensCollection,
+    hashPassword,
+    verifyPassword,
+    migratePasswordIfNeeded
+} = require('./db');
+const { generateToken, generateRefreshToken, verifyToken } = require('./utils/tokens');
+const { verifyToken: authMiddleware, optionalAuth, requireRole } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,9 +30,8 @@ const isTestMode = !isLiveMode;
 
 console.log(`💳 Paystack Mode: ${isLiveMode ? '🔴 LIVE' : '🟡 TEST'}`);
 
-// Kenyan bank codes for Paystack (COMPLETE & VERIFIED)
+// Kenyan bank codes for Paystack
 const paystackBankCodes = {
-    // Major Kenyan Banks
     'KCB': '044',
     'Equity': '068',
     'Cooperative': '011',
@@ -35,29 +45,7 @@ const paystackBankCodes = {
     'Guaranty Trust Bank': '058',
     'Bank of Africa': '043',
     'Citibank': '024',
-    'Ecobank': '050',
-    'Bank of Baroda': '046',
-    'Chase Bank': '102',
-    'Consolidated Bank': '103',
-    'Credit Bank': '097',
-    'Development Bank': '073',
-    'First Community Bank': '104',
-    'Guardian Bank': '105',
-    'Gulf African Bank': '106',
-    'Housing Finance': '067',
-    'Kenya Commercial Bank': '044',
-    'Kenya Women Microfinance': '107',
-    'Kingdom Bank': '108',
-    'M-Oriental Bank': '109',
-    'Middle East Bank': '110',
-    'National Bank': '012',
-    'Paramount Bank': '111',
-    'Prime Bank': '112',
-    'Sidian Bank': '113',
-    'Spire Bank': '114',
-    'Transnational Bank': '115',
-    'UBA Kenya': '116',
-    'Victoria Bank': '117'
+    'Ecobank': '050'
 };
 
 // Initialize MongoDB connection
@@ -69,7 +57,7 @@ async function initDB() {
     }
 }
 
-// ============= USER ENDPOINTS =============
+// ============= AUTHENTICATION ENDPOINTS =============
 
 // Register user in MongoDB with auto-subaccount creation
 app.post('/api/users/register', async (req, res) => {
@@ -91,6 +79,9 @@ app.post('/api/users/register', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Email already registered' });
         }
         
+        // Hash password with bcrypt
+        const hashedPassword = await hashPassword(password);
+        
         // Try to create Paystack subaccount (LIVE mode only)
         let subaccountCode = null;
         let subaccountError = null;
@@ -99,12 +90,9 @@ app.post('/api/users/register', async (req, res) => {
             try {
                 console.log(`🔄 Attempting to create Paystack subaccount for ${businessName}...`);
                 
-                // Get the correct bank code
                 const bankCode = paystackBankCodes[bankName];
                 
                 if (!bankCode) {
-                    console.error(`❌ Unknown bank: ${bankName}`);
-                    console.log(`Available banks: ${Object.keys(paystackBankCodes).slice(0, 10).join(', ')}...`);
                     subaccountError = `Bank "${bankName}" not recognized. Please contact support.`;
                 } else {
                     console.log(`Bank code: ${bankCode} (mapped from ${bankName})`);
@@ -148,13 +136,14 @@ app.post('/api/users/register', async (req, res) => {
             console.log('Test mode: Skipping subaccount creation');
         }
         
-        // Create user with or without subaccount
+        // Create new user
         const newUser = {
             id: Date.now().toString(),
             email,
-            password: hashPassword(password),
+            password: hashedPassword,
             businessName,
             businessPhone,
+            role: 'business',
             bankDetails: {
                 bankName,
                 accountNumber,
@@ -180,19 +169,30 @@ app.post('/api/users/register', async (req, res) => {
             invoiceLimit: 5
         });
         
+        // Generate JWT token for auto-login
+        const token = generateToken(newUser);
+        const refreshToken = generateRefreshToken(newUser);
+        
+        // Store refresh token
+        const refreshTokensCollection = getRefreshTokensCollection();
+        await refreshTokensCollection.insertOne({
+            userId: newUser.id,
+            token: refreshToken,
+            createdAt: new Date()
+        });
+        
         const { password: _, ...userWithoutPassword } = newUser;
         
         console.log(`✅ User registered successfully`);
         if (subaccountCode) {
             console.log(`✅ Subaccount auto-created: ${subaccountCode}`);
-        } else if (isLiveMode) {
-            console.log(`⚠️ Subaccount not created: ${subaccountError || 'Unknown error'}`);
-            console.log(`📌 Manual subaccount creation may be required`);
         }
         
         res.json({ 
             success: true, 
             user: userWithoutPassword,
+            token,
+            refreshToken,
             subaccountCreated: subaccountCode !== null,
             subaccountMessage: subaccountCode ? 'Subaccount created automatically' : (subaccountError || 'Manual subaccount creation may be required')
         });
@@ -202,9 +202,11 @@ app.post('/api/users/register', async (req, res) => {
     }
 });
 
-// Login user from MongoDB
+// Login user with JWT token
 app.post('/api/users/login', async (req, res) => {
     const { email, password } = req.body;
+    
+    console.log('🔐 Login attempt:', email);
     
     try {
         await initDB();
@@ -212,27 +214,136 @@ app.post('/api/users/login', async (req, res) => {
         const user = await usersCollection.findOne({ email });
         
         if (!user) {
-            return res.status(400).json({ success: false, message: 'User not found' });
+            return res.status(401).json({ success: false, message: 'Invalid email or password' });
         }
         
-        if (user.password !== hashPassword(password)) {
-            return res.status(400).json({ success: false, message: 'Invalid password' });
+        // Migrate old password hash if needed
+        let isValid = await verifyPassword(password, user.password);
+        
+        if (!isValid) {
+            // Try old hash format (for backward compatibility)
+            const { migratePasswordIfNeeded } = require('./db');
+            const migratedHash = await migratePasswordIfNeeded(user, password);
+            isValid = await verifyPassword(password, migratedHash);
+            
+            if (!isValid) {
+                return res.status(401).json({ success: false, message: 'Invalid email or password' });
+            }
         }
         
+        // Generate tokens
+        const token = generateToken(user);
+        const refreshToken = generateRefreshToken(user);
+        
+        // Store refresh token
+        const refreshTokensCollection = getRefreshTokensCollection();
+        await refreshTokensCollection.insertOne({
+            userId: user.id,
+            token: refreshToken,
+            createdAt: new Date()
+        });
+        
+        // Remove password from response
         const { password: _, ...userWithoutPassword } = user;
-        res.json({ success: true, user: userWithoutPassword });
+        
+        console.log(`✅ Login successful: ${email}`);
+        
+        res.json({ 
+            success: true, 
+            user: userWithoutPassword,
+            token,
+            refreshToken
+        });
     } catch (error) {
-        console.error('Login error:', error);
+        console.error('❌ Login error:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
-// Get user by ID
-app.get('/api/users/:id', async (req, res) => {
+// Refresh token endpoint
+app.post('/api/users/refresh', async (req, res) => {
+    const { refreshToken } = req.body;
+    
+    if (!refreshToken) {
+        return res.status(400).json({ success: false, message: 'Refresh token required' });
+    }
+    
+    try {
+        await initDB();
+        const refreshTokensCollection = getRefreshTokensCollection();
+        
+        // Verify refresh token exists in database
+        const storedToken = await refreshTokensCollection.findOne({ token: refreshToken });
+        if (!storedToken) {
+            return res.status(401).json({ success: false, message: 'Invalid refresh token' });
+        }
+        
+        // Verify token signature
+        const decoded = verifyToken(refreshToken);
+        if (!decoded || decoded.type !== 'refresh') {
+            return res.status(401).json({ success: false, message: 'Invalid refresh token' });
+        }
+        
+        // Get user
+        const usersCollection = getUsersCollection();
+        const user = await usersCollection.findOne({ id: decoded.id });
+        
+        if (!user) {
+            return res.status(401).json({ success: false, message: 'User not found' });
+        }
+        
+        // Generate new tokens
+        const newToken = generateToken(user);
+        const newRefreshToken = generateRefreshToken(user);
+        
+        // Replace refresh token
+        await refreshTokensCollection.deleteOne({ token: refreshToken });
+        await refreshTokensCollection.insertOne({
+            userId: user.id,
+            token: newRefreshToken,
+            createdAt: new Date()
+        });
+        
+        const { password: _, ...userWithoutPassword } = user;
+        
+        res.json({
+            success: true,
+            user: userWithoutPassword,
+            token: newToken,
+            refreshToken: newRefreshToken
+        });
+    } catch (error) {
+        console.error('❌ Refresh error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Logout endpoint
+app.post('/api/users/logout', authMiddleware, async (req, res) => {
+    const { refreshToken } = req.body;
+    
+    try {
+        await initDB();
+        
+        // Remove refresh token if provided
+        if (refreshToken) {
+            const refreshTokensCollection = getRefreshTokensCollection();
+            await refreshTokensCollection.deleteOne({ token: refreshToken });
+        }
+        
+        res.json({ success: true, message: 'Logged out successfully' });
+    } catch (error) {
+        console.error('❌ Logout error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Get current user (from token)
+app.get('/api/users/me', authMiddleware, async (req, res) => {
     try {
         await initDB();
         const usersCollection = getUsersCollection();
-        const user = await usersCollection.findOne({ id: req.params.id });
+        const user = await usersCollection.findOne({ id: req.user.id });
         
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
@@ -246,8 +357,8 @@ app.get('/api/users/:id', async (req, res) => {
     }
 });
 
-// Update user subaccount
-app.post('/api/users/update-subaccount', async (req, res) => {
+// Update user subaccount (protected)
+app.post('/api/users/update-subaccount', authMiddleware, requireRole('superadmin'), async (req, res) => {
     const { userId, subaccountCode } = req.body;
     
     try {
@@ -270,18 +381,84 @@ app.post('/api/users/update-subaccount', async (req, res) => {
     }
 });
 
-// ============= PAYMENT ENDPOINTS =============
+// ============= PAYMENT ENDPOINTS (PROTECTED) =============
+
+// Create Paystack Subaccount for a business
+app.post('/api/create-subaccount', authMiddleware, async (req, res) => {
+    const { business_name, settlement_bank, account_number, account_name, percentage_charge, email, phone } = req.body;
+    
+    try {
+        if (isTestMode) {
+            console.log('Test mode: Skipping subaccount creation');
+            res.json({ 
+                success: true, 
+                subaccount_code: null,
+                message: 'Test mode: Subaccount creation skipped'
+            });
+            return;
+        }
+        
+        console.log(`🔴 LIVE MODE: Creating subaccount for ${business_name}`);
+        console.log(`Bank: ${settlement_bank}, Account: ${account_number}`);
+        
+        const bankCode = paystackBankCodes[settlement_bank] || settlement_bank;
+        
+        const response = await fetch('https://api.paystack.co/subaccount', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                business_name: business_name,
+                settlement_bank: bankCode,
+                account_number: account_number,
+                account_name: account_name,
+                percentage_charge: percentage_charge,
+                primary_contact_email: email,
+                primary_contact_phone: phone,
+                metadata: {
+                    platform: 'SmartInvoice Kenya',
+                    registered_at: new Date().toISOString()
+                }
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status) {
+            console.log(`✅ Subaccount created: ${data.data.subaccount_code}`);
+            res.json({ 
+                success: true, 
+                subaccount_code: data.data.subaccount_code,
+                message: 'Subaccount created successfully'
+            });
+        } else {
+            console.error('❌ Paystack subaccount error:', data);
+            res.json({ 
+                success: false, 
+                subaccount_code: null,
+                error: data.message
+            });
+        }
+    } catch (error) {
+        console.error('❌ Server error:', error);
+        res.json({ 
+            success: false, 
+            subaccount_code: null,
+            error: error.message
+        });
+    }
+});
 
 // Initialize Paystack payment
-app.post('/api/initialize-payment', async (req, res) => {
+app.post('/api/initialize-payment', authMiddleware, async (req, res) => {
     const { email, phone, amount, invoiceId, subaccountCode } = req.body;
     
     console.log('=== Payment Initialization Request ===');
-    console.log('Mode:', isLiveMode ? '🔴 LIVE' : '🟡 TEST');
-    console.log('Email:', email);
+    console.log('User:', req.user.email);
     console.log('Amount:', amount);
     console.log('Invoice ID:', invoiceId);
-    console.log('Subaccount:', subaccountCode);
     
     try {
         if (!process.env.PAYSTACK_SECRET_KEY) {
@@ -305,6 +482,7 @@ app.post('/api/initialize-payment', async (req, res) => {
                 invoiceId: invoiceId,
                 phone: phone,
                 platform_fee: (amount * PLATFORM_FEE / 100),
+                userId: req.user.id,
                 custom_fields: [
                     {
                         display_name: "Invoice ID",
@@ -367,7 +545,7 @@ app.post('/api/initialize-payment', async (req, res) => {
     }
 });
 
-// Verify payment
+// Verify payment (webhook - no auth needed)
 app.post('/api/verify-payment', async (req, res) => {
     const { reference } = req.body;
     
@@ -413,14 +591,15 @@ app.post('/api/verify-payment', async (req, res) => {
     }
 });
 
-// Save invoice to MongoDB
-app.post('/api/save-invoice', async (req, res) => {
+// Save invoice to MongoDB (protected)
+app.post('/api/save-invoice', authMiddleware, async (req, res) => {
     const { invoice } = req.body;
     const invoiceId = crypto.randomBytes(8).toString('hex');
     
     const newInvoice = {
         ...invoice,
         id: invoiceId,
+        userId: req.user.id,
         createdAt: new Date().toISOString(),
         paid: false
     };
@@ -429,7 +608,7 @@ app.post('/api/save-invoice', async (req, res) => {
         await initDB();
         const invoicesCollection = getInvoicesCollection();
         await invoicesCollection.insertOne(newInvoice);
-        console.log(`✅ Invoice saved to MongoDB: ${invoiceId}`);
+        console.log(`✅ Invoice saved to MongoDB: ${invoiceId} for user ${req.user.email}`);
         res.json({ success: true, invoiceId });
     } catch (error) {
         console.error('Error saving invoice:', error);
@@ -438,7 +617,7 @@ app.post('/api/save-invoice', async (req, res) => {
 });
 
 // Get invoice from MongoDB
-app.get('/api/invoice/:id', async (req, res) => {
+app.get('/api/invoice/:id', optionalAuth, async (req, res) => {
     try {
         await initDB();
         const invoicesCollection = getInvoicesCollection();
@@ -454,12 +633,12 @@ app.get('/api/invoice/:id', async (req, res) => {
     }
 });
 
-// Get all invoices for a user
-app.get('/api/invoices/:userId', async (req, res) => {
+// Get all invoices for current user (protected)
+app.get('/api/invoices/me', authMiddleware, async (req, res) => {
     try {
         await initDB();
         const invoicesCollection = getInvoicesCollection();
-        const invoices = await invoicesCollection.find({ userId: req.params.userId }).toArray();
+        const invoices = await invoicesCollection.find({ userId: req.user.id }).toArray();
         res.json(invoices);
     } catch (error) {
         console.error('Error fetching invoices:', error);
@@ -540,6 +719,7 @@ app.listen(PORT, async () => {
     console.log(`💰 Currency: Kenyan Shillings (KES)`);
     console.log(`💳 Mode: ${isLiveMode ? '🔴 LIVE' : '🟡 TEST'}`);
     console.log(`💸 Platform fee: ${PLATFORM_FEE}%`);
+    console.log(`🔐 JWT Authentication: ${process.env.JWT_SECRET ? '✓ Enabled' : '✗ Missing'}`);
     console.log(`========================================`);
     
     // Initialize MongoDB connection
@@ -557,6 +737,7 @@ app.listen(PORT, async () => {
     } else {
         console.log(`\n🔴 LIVE MODE ACTIVE - Real payments will be processed`);
         console.log(`📌 SUBACCOUNT FEATURE ACTIVE`);
-        console.log(`📌 MONGODB DATABASE ACTIVE\n`);
+        console.log(`📌 MONGODB DATABASE ACTIVE`);
+        console.log(`📌 JWT AUTHENTICATION ACTIVE\n`);
     }
 });

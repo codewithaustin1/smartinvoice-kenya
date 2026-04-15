@@ -120,5 +120,37 @@
             header.appendChild(userNav);
         }
     </script>
+<script>
+    // Helper function for authenticated API calls
+    async function authenticatedFetch(url, options = {}) {
+        const token = auth.getToken();
+        
+        options.headers = {
+            ...options.headers,
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        };
+        
+        let response = await fetch(url, options);
+        
+        if (response.status === 401) {
+            const refreshed = await auth.refreshSession();
+            if (refreshed) {
+                options.headers['Authorization'] = `Bearer ${auth.getToken()}`;
+                response = await fetch(url, options);
+            } else {
+                window.location.href = 'login.html';
+                throw new Error('Session expired');
+            }
+        }
+        
+        return response;
+    }
+    
+    // Override the existing fetch in script.js
+    window.authenticatedFetch = authenticatedFetch;
+</script>
+
+
 </body>
 </html>
