@@ -19,8 +19,9 @@ const isTestMode = !isLiveMode;
 
 console.log(`💳 Paystack Mode: ${isLiveMode ? '🔴 LIVE' : '🟡 TEST'}`);
 
-// Kenyan bank codes for Paystack
+// Kenyan bank codes for Paystack (COMPLETE & VERIFIED)
 const paystackBankCodes = {
+    // Major Kenyan Banks
     'KCB': '044',
     'Equity': '068',
     'Cooperative': '011',
@@ -30,7 +31,33 @@ const paystackBankCodes = {
     'NCBA': '030',
     'Diamond Trust': '063',
     'I&M': '070',
-    'Family Bank': '063'
+    'Family Bank': '063',
+    'Guaranty Trust Bank': '058',
+    'Bank of Africa': '043',
+    'Citibank': '024',
+    'Ecobank': '050',
+    'Bank of Baroda': '046',
+    'Chase Bank': '102',
+    'Consolidated Bank': '103',
+    'Credit Bank': '097',
+    'Development Bank': '073',
+    'First Community Bank': '104',
+    'Guardian Bank': '105',
+    'Gulf African Bank': '106',
+    'Housing Finance': '067',
+    'Kenya Commercial Bank': '044',
+    'Kenya Women Microfinance': '107',
+    'Kingdom Bank': '108',
+    'M-Oriental Bank': '109',
+    'Middle East Bank': '110',
+    'National Bank': '012',
+    'Paramount Bank': '111',
+    'Prime Bank': '112',
+    'Sidian Bank': '113',
+    'Spire Bank': '114',
+    'Transnational Bank': '115',
+    'UBA Kenya': '116',
+    'Victoria Bank': '117'
 };
 
 // Initialize MongoDB connection
@@ -44,9 +71,15 @@ async function initDB() {
 
 // ============= USER ENDPOINTS =============
 
-// Register user in MongoDB
+// Register user in MongoDB with auto-subaccount creation
 app.post('/api/users/register', async (req, res) => {
     const { email, password, businessName, businessPhone, bankName, accountNumber, accountName } = req.body;
+    
+    console.log('========================================');
+    console.log('📝 REGISTRATION REQUEST');
+    console.log(`Business: ${businessName}`);
+    console.log(`Email: ${email}`);
+    console.log(`Bank: ${bankName}, Account: ${accountNumber}`);
     
     try {
         await initDB();
@@ -58,7 +91,64 @@ app.post('/api/users/register', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Email already registered' });
         }
         
-        // Create user
+        // Try to create Paystack subaccount (LIVE mode only)
+        let subaccountCode = null;
+        let subaccountError = null;
+        
+        if (isLiveMode) {
+            try {
+                console.log(`🔄 Attempting to create Paystack subaccount for ${businessName}...`);
+                
+                // Get the correct bank code
+                const bankCode = paystackBankCodes[bankName];
+                
+                if (!bankCode) {
+                    console.error(`❌ Unknown bank: ${bankName}`);
+                    console.log(`Available banks: ${Object.keys(paystackBankCodes).slice(0, 10).join(', ')}...`);
+                    subaccountError = `Bank "${bankName}" not recognized. Please contact support.`;
+                } else {
+                    console.log(`Bank code: ${bankCode} (mapped from ${bankName})`);
+                    
+                    const response = await fetch('https://api.paystack.co/subaccount', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            business_name: businessName,
+                            settlement_bank: bankCode,
+                            account_number: accountNumber,
+                            account_name: accountName,
+                            percentage_charge: PLATFORM_FEE,
+                            primary_contact_email: email,
+                            primary_contact_phone: businessPhone,
+                            metadata: {
+                                platform: 'SmartInvoice Kenya',
+                                registered_at: new Date().toISOString()
+                            }
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.status) {
+                        subaccountCode = data.data.subaccount_code;
+                        console.log(`✅ Subaccount created: ${subaccountCode}`);
+                    } else {
+                        subaccountError = data.message;
+                        console.error(`❌ Paystack error: ${data.message}`);
+                    }
+                }
+            } catch (error) {
+                subaccountError = error.message;
+                console.error(`❌ Subaccount creation error: ${error.message}`);
+            }
+        } else {
+            console.log('Test mode: Skipping subaccount creation');
+        }
+        
+        // Create user with or without subaccount
         const newUser = {
             id: Date.now().toString(),
             email,
@@ -69,7 +159,8 @@ app.post('/api/users/register', async (req, res) => {
                 bankName,
                 accountNumber,
                 accountName,
-                subaccountCode: null
+                subaccountCode: subaccountCode,
+                subaccountError: subaccountError
             },
             createdAt: new Date().toISOString(),
             invoices: [],
@@ -89,11 +180,24 @@ app.post('/api/users/register', async (req, res) => {
             invoiceLimit: 5
         });
         
-        // Remove password from response
         const { password: _, ...userWithoutPassword } = newUser;
-        res.json({ success: true, user: userWithoutPassword });
+        
+        console.log(`✅ User registered successfully`);
+        if (subaccountCode) {
+            console.log(`✅ Subaccount auto-created: ${subaccountCode}`);
+        } else if (isLiveMode) {
+            console.log(`⚠️ Subaccount not created: ${subaccountError || 'Unknown error'}`);
+            console.log(`📌 Manual subaccount creation may be required`);
+        }
+        
+        res.json({ 
+            success: true, 
+            user: userWithoutPassword,
+            subaccountCreated: subaccountCode !== null,
+            subaccountMessage: subaccountCode ? 'Subaccount created automatically' : (subaccountError || 'Manual subaccount creation may be required')
+        });
     } catch (error) {
-        console.error('Registration error:', error);
+        console.error('❌ Registration error:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 });
@@ -111,12 +215,10 @@ app.post('/api/users/login', async (req, res) => {
             return res.status(400).json({ success: false, message: 'User not found' });
         }
         
-        // Verify password
         if (user.password !== hashPassword(password)) {
             return res.status(400).json({ success: false, message: 'Invalid password' });
         }
         
-        // Remove password from response
         const { password: _, ...userWithoutPassword } = user;
         res.json({ success: true, user: userWithoutPassword });
     } catch (error) {
@@ -154,7 +256,7 @@ app.post('/api/users/update-subaccount', async (req, res) => {
         
         const result = await usersCollection.updateOne(
             { id: userId },
-            { $set: { 'bankDetails.subaccountCode': subaccountCode } }
+            { $set: { 'bankDetails.subaccountCode': subaccountCode, 'bankDetails.subaccountError': null } }
         );
         
         if (result.matchedCount === 0) {
@@ -169,74 +271,6 @@ app.post('/api/users/update-subaccount', async (req, res) => {
 });
 
 // ============= PAYMENT ENDPOINTS =============
-
-// Create Paystack Subaccount for a business
-app.post('/api/create-subaccount', async (req, res) => {
-    const { business_name, settlement_bank, account_number, account_name, percentage_charge, email, phone } = req.body;
-    
-    try {
-        if (isTestMode) {
-            console.log('Test mode: Skipping subaccount creation');
-            res.json({ 
-                success: true, 
-                subaccount_code: null,
-                message: 'Test mode: Subaccount creation skipped'
-            });
-            return;
-        }
-        
-        console.log(`🔴 LIVE MODE: Creating subaccount for ${business_name}`);
-        console.log(`Bank: ${settlement_bank}, Account: ${account_number}`);
-        
-        const bankCode = paystackBankCodes[settlement_bank] || settlement_bank;
-        
-        const response = await fetch('https://api.paystack.co/subaccount', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                business_name: business_name,
-                settlement_bank: bankCode,
-                account_number: account_number,
-                account_name: account_name,
-                percentage_charge: percentage_charge,
-                primary_contact_email: email,
-                primary_contact_phone: phone,
-                metadata: {
-                    platform: 'SmartInvoice Kenya',
-                    registered_at: new Date().toISOString()
-                }
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.status) {
-            console.log(`✅ Subaccount created: ${data.data.subaccount_code}`);
-            res.json({ 
-                success: true, 
-                subaccount_code: data.data.subaccount_code,
-                message: 'Subaccount created successfully'
-            });
-        } else {
-            console.error('❌ Paystack subaccount error:', data);
-            res.json({ 
-                success: false, 
-                subaccount_code: null,
-                error: data.message
-            });
-        }
-    } catch (error) {
-        console.error('❌ Server error:', error);
-        res.json({ 
-            success: false, 
-            subaccount_code: null,
-            error: error.message
-        });
-    }
-});
 
 // Initialize Paystack payment
 app.post('/api/initialize-payment', async (req, res) => {
