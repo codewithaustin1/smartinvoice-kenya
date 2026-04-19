@@ -4,398 +4,383 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - SmartInvoice Kenya</title>
-    <link rel="stylesheet" href="style.css">
     <style>
-    /* Authority Palette */
-    :root {
-        --primary-navy: #0f172a;
-        --secondary-navy: #1e293b;
-        --trust-green: #059669;
-        --bg-light: #f8fafc;
-        --text-muted: #475569;
-    }
+        /* AUTHORITY PALETTE VARIABLES */
+        :root {
+            --primary-navy: #0f172a;
+            --secondary-navy: #1e293b;
+            --trust-green: #059669;
+            --trust-green-hover: #065f46;
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+            --slate-border: #cbd5e1;
+            --text-main: #1e293b;
+            --text-muted: #475569;
+            --bg-light: #f8fafc;
+        }
 
-    body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-    }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    .auth-container {
-        max-width: 450px;
-        width: 100%;
-        background: white;
-        border-radius: 20px;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-        overflow: hidden;
-    }
-    
-    .auth-header {
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-        color: white;
-        padding: 40px 30px;
-        text-align: center;
-    }
-    
-    .auth-form { padding: 30px; }
-    
-    .toggle-buttons {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 30px;
-        border-bottom: 2px solid #e2e8f0;
-    }
-    
-    .toggle-btn {
-        flex: 1;
-        padding: 10px;
-        background: none;
-        border: none;
-        font-size: 1.1em;
-        cursor: pointer;
-        color: var(--text-muted);
-        transition: all 0.3s;
-    }
-    
-    .toggle-btn.active {
-        color: var(--primary-navy);
-        border-bottom: 2px solid var(--trust-green);
-        margin-bottom: -2px;
-        font-weight: 600;
-    }
-    
-    .form-group label {
-        display: block;
-        margin-bottom: 8px;
-        color: var(--text-muted);
-        font-size: 0.9em;
-    }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-gradient);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
 
-    .form-group { margin-bottom: 20px; }
-    
-    input, select {
-        width: 100%;
-        padding: 12px;
-        border: 1px solid #cbd5e1;
-        border-radius: 8px;
-        font-size: 1em;
-    }
-    
-    input:focus {
-        outline: none;
-        border-color: var(--trust-green);
-    }
+        /* CONTAINER STRUCTURE */
+        .auth-container {
+            max-width: 480px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            animation: fadeIn 0.5s ease-out;
+        }
 
-    .btn-primary {
-        width: 100%;
-        background: var(--trust-green);
-        color: white;
-        border: none;
-        padding: 14px;
-        border-radius: 8px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.3s;
-    }
-    
-    .btn-primary:hover { background: #065f46; }
-    
-    .alert.success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
-    .alert.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
-    
-    .link a { color: var(--trust-green); text-decoration: none; font-weight: 500; }
-    
-    .feature-list { background: var(--bg-light); padding: 20px; border-radius: 12px; margin-top: 20px; }
-    .feature-list li:before { content: "✔"; color: var(--trust-green); margin-right: 8px; }
-    
-    .bank-details-section { background: var(--bg-light); padding: 15px; border-radius: 12px; margin: 15px 0; }
-    
-    .loading-btn { opacity: 0.7; cursor: not-allowed; }
-</style>
+        .auth-header {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+            border-bottom: 4px solid var(--trust-green);
+        }
 
-            
+        .auth-header h1 {
+            font-size: 1.8em;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .auth-header p {
+            font-size: 0.9em;
+            opacity: 0.8;
+            line-height: 1.4;
+        }
+
+        .auth-form-wrapper {
+            padding: 30px;
+        }
+
+        /* TAB NAVIGATION - FIXED "MIXING" ISSUE */
+        .toggle-buttons {
+            display: flex;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .toggle-btn {
+            flex: 1;
+            padding: 14px;
+            background: none;
+            border: none;
+            font-size: 1em;
+            font-weight: 500;
+            cursor: pointer;
+            color: #94a3b8;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .toggle-btn:hover {
+            color: var(--secondary-navy);
+        }
+
+        .toggle-btn.active {
+            color: var(--primary-navy);
+            font-weight: 700;
+        }
+
+        .toggle-btn.active::after {
+            content: "";
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background-color: var(--trust-green);
+        }
+
+        /* FORM ELEMENTS */
+        .form-panel {
+            display: none;
+        }
+
+        .form-panel.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-main);
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--slate-border);
+            border-radius: 8px;
+            font-size: 1em;
+            color: var(--text-main);
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--trust-green);
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+        }
+
+        .btn-primary {
+            width: 100%;
+            background: var(--trust-green);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s;
+            margin-top: 10px;
+        }
+
+        .btn-primary:hover {
+            background: var(--trust-green-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        /* ALERTS */
+        .alert {
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+            display: none;
+            border-left: 4px solid transparent;
+        }
+
+        .alert.success {
+            display: block;
+            background: #f0fdf4;
+            color: #166534;
+            border-left-color: #22c55e;
+        }
+
+        .alert.error {
+            display: block;
+            background: #fef2f2;
+            color: #991b1b;
+            border-left-color: #ef4444;
+        }
+
+        /* EXTRAS */
+        .bank-details-section {
+            background: var(--bg-light);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            margin: 20px 0;
+        }
+
+        .bank-details-section h4 {
+            margin-bottom: 15px;
+            color: var(--primary-navy);
+            font-size: 0.95em;
+        }
+
+        .feature-list {
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .feature-list ul {
+            list-style: none;
+            font-size: 0.85em;
+            color: var(--text-muted);
+        }
+
+        .feature-list li {
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+        }
+
+        .feature-list li::before {
+            content: "✓";
+            color: var(--trust-green);
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .link {
+            text-align: center;
+            margin-top: 25px;
+            font-size: 0.9em;
+        }
+
+        .link a {
+            color: var(--trust-green);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .phone-hint {
+            font-size: 0.75em;
+            color: var(--text-muted);
+            margin-top: 5px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
 </head>
 <body>
     <div class="auth-container">
         <div class="auth-header">
             <h1>SmartInvoice</h1>
-            <p>Effortless Professional Invoicing. Accept M-PESA, Cards, and More.</p>
-            <p style="font-size: 0.8em; margin-top: 5px;">KRA compliant invoice app</p>
+            <p>KRA Compliant Invoicing for Kenyan Businesses</p>
         </div>
         
-        <div class="auth-form">
+        <div class="auth-form-wrapper">
             <div class="toggle-buttons">
-                <button class="toggle-btn active" onclick="showPanel('login')">Login</button>
-                <button class="toggle-btn" onclick="showPanel('register')">Register</button>
+                <button class="toggle-btn active" id="tab-login" onclick="showPanel('login')">Login</button>
+                <button class="toggle-btn" id="tab-register" onclick="showPanel('register')">Create Account</button>
             </div>
             
             <div id="alert" class="alert"></div>
             
-            <!-- Login Form -->
             <div id="loginPanel" class="form-panel active">
                 <form id="loginForm">
                     <div class="form-group">
                         <label>Email Address</label>
-                        <input type="email" id="loginEmail" placeholder="you@business.com" required>
+                        <input type="email" id="loginEmail" placeholder="business@example.co.ke" required>
                     </div>
                     
                     <div class="form-group">
                         <label>Password</label>
-                        <input type="password" id="loginPassword" placeholder="******" required>
+                        <input type="password" id="loginPassword" placeholder="••••••••" required>
                     </div>
                     
-                    <button type="submit" class="btn-primary">Login to Dashboard</button>
+                    <button type="submit" class="btn-primary">Secure Login</button>
                 </form>
                 
                 <div class="link">
-                    <a href="#" onclick="showPanel('register')">Don't have an account? Register for free</a>
+                    <a href="#" onclick="showPanel('register')">New here? Register for a free trial</a>
                 </div>
             </div>
             
-            <!-- Register Form -->
             <div id="registerPanel" class="form-panel">
                 <form id="registerForm">
                     <div class="form-group">
                         <label>Business Name</label>
-                        <input type="text" id="regBusinessName" placeholder="Simba Enterprises" required>
+                        <input type="text" id="regBusinessName" placeholder="Simba Enterprises Ltd" required>
                     </div>
                     
                     <div class="form-group">
                         <label>Email Address</label>
-                        <input type="email" id="regEmail" placeholder="you@business.com" required>
+                        <input type="email" id="regEmail" placeholder="admin@business.co.ke" required>
                     </div>
                     
                     <div class="form-group">
-                        <label>Phone Number</label>
+                        <label>M-PESA Phone Number</label>
                         <input type="tel" id="regPhone" placeholder="254712345678" required>
-                        <div class="phone-hint">Format: 254XXXXXXXXX (e.g., 254712345678)</div>
+                        <div class="phone-hint">Enter in format: 254XXXXXXXXX</div>
                     </div>
                     
                     <div class="form-group">
-                        <label>Password</label>
-                        <input type="password" id="regPassword" placeholder="At least 6 characters" required>
+                        <label>Create Password</label>
+                        <input type="password" id="regPassword" placeholder="Minimum 6 characters" required>
                     </div>
                     
-                    <div class="form-group">
-                        <label>Confirm Password</label>
-                        <input type="password" id="regConfirmPassword" placeholder="Confirm your password" required>
-                    </div>
-                    
-                    <!-- Bank Details Section (for settlements) -->
                     <div class="bank-details-section">
-                        <h4>🏦 Settlement Details (Where to receive payments)</h4>
+                        <h4>🏦 Settlement Destination</h4>
                         <div class="form-group">
                             <label>Bank Name</label>
                             <select id="regBank" required>
-                                <option value="">Select your bank</option>
+                                <option value="">Select your bank...</option>
                                 <option value="KCB">KCB Bank</option>
                                 <option value="Equity">Equity Bank</option>
                                 <option value="Cooperative">Cooperative Bank</option>
                                 <option value="Absa">Absa Bank</option>
-                                <option value="Stanbic">Stanbic Bank</option>
-                                <option value="Standard Chartered">Standard Chartered</option>
                                 <option value="NCBA">NCBA Bank</option>
-                                <option value="Diamond Trust">Diamond Trust Bank (DTB)</option>
-                                <option value="I&M">I&M Bank</option>
-                                <option value="Family Bank">Family Bank</option>
+                                <option value="Other">Other Bank/Microfinance</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Bank Account Number</label>
-                            <input type="text" id="regAccountNumber" placeholder="Your bank account number" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Account Name (as registered with bank)</label>
-                            <input type="text" id="regAccountName" placeholder="Name as per bank records" required>
+                            <label>Account Number</label>
+                            <input type="text" id="regAccountNumber" placeholder="Account for receiving payments" required>
                         </div>
                     </div>
                     
-                    <button type="submit" class="btn-primary" id="registerSubmitBtn">Start Free Trial</button>
+                    <button type="submit" class="btn-primary" id="registerSubmitBtn">Get Started Now</button>
                 </form>
                 
                 <div class="feature-list">
-                <h3>Simple, Transparent Payments</h3>
-           <ul>
-        <li><strong>Direct Deposits:</strong> Payments go straight to your bank account.</li>
-        <li><strong>Fast Settlements:</strong> Receive your funds within 24–48 hours.</li>
-        <li><strong>Clear Fees:</strong>
-            <ul>
-                <li><strong>Platform Fee:</strong> 0.5% (automatically deducted).</li>
-                <li><strong>Processing Fees:</strong> Standard Paystack rates apply (1.5% for M-PESA; 2.9% + KES 20 for cards).</li>
-            </ul>
-        </li>
-    </ul>
-           <p style="margin-top: 10px; font-size: 0.9em; color: #6b7280;">
-                        No credit card required for free trial. 5 free invoices included.
-                    </p>
+                    <ul>
+                        <li>Automated M-PESA reconciliation</li>
+                        <li>Direct bank settlements (24-48hrs)</li>
+                        <li>Professional KRA-friendly PDF invoices</li>
+                    </ul>
                 </div>
             </div>
         </div>
     </div>
-    
-    <script src="auth.js"></script>
+
     <script>
         function showPanel(panel) {
-            // Update toggle buttons
-            const buttons = document.querySelectorAll('.toggle-btn');
-            buttons.forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event.target.classList.add('active');
+            // Tab visual update
+            document.getElementById('tab-login').classList.remove('active');
+            document.getElementById('tab-register').classList.remove('active');
             
-            // Show correct panel
+            // Content update
             document.getElementById('loginPanel').classList.remove('active');
             document.getElementById('registerPanel').classList.remove('active');
             
             if (panel === 'login') {
+                document.getElementById('tab-login').classList.add('active');
                 document.getElementById('loginPanel').classList.add('active');
             } else {
+                document.getElementById('tab-register').classList.add('active');
                 document.getElementById('registerPanel').classList.add('active');
             }
             
-            // Clear alerts
+            // Reset Alert
             const alertDiv = document.getElementById('alert');
             alertDiv.style.display = 'none';
-            alertDiv.className = 'alert';
         }
-        
-        function showAlert(message, type) {
-            const alertDiv = document.getElementById('alert');
-            alertDiv.textContent = message;
-            alertDiv.className = `alert ${type}`;
-            alertDiv.style.display = 'block';
-            setTimeout(() => {
-                alertDiv.style.display = 'none';
-            }, 5000);
-        }
-        
-        // Format phone number as user types
+
+        // Phone formatter
         const phoneInput = document.getElementById('regPhone');
         if (phoneInput) {
             phoneInput.addEventListener('input', function(e) {
                 let value = e.target.value.replace(/\D/g, '');
-                if (value.startsWith('0')) {
-                    value = '254' + value.substring(1);
-                }
-                if (!value.startsWith('254') && value.length > 0) {
-                    value = '254' + value;
-                }
-                if (value.length > 12) {
-                    value = value.substring(0, 12);
-                }
-                e.target.value = value;
+                if (value.startsWith('0')) value = '254' + value.substring(1);
+                if (!value.startsWith('254') && value.length > 0) value = '254' + value;
+                e.target.value = value.substring(0, 12);
             });
-        }
-        
-        // Handle Login
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const email = document.getElementById('loginEmail').value;
-            const password = document.getElementById('loginPassword').value;
-            
-            // Show loading state
-            const submitBtn = e.target.querySelector('button[type="submit"]');
-            const originalText = submitBtn.textContent;
-            submitBtn.textContent = 'Logging in...';
-            submitBtn.disabled = true;
-            
-            const result = await auth.login(email, password);
-            
-            if (result.success) {
-                showAlert(result.message, 'success');
-                setTimeout(() => {
-                    window.location.href = 'dashboard.html';
-                }, 1000);
-            } else {
-                showAlert(result.message, 'error');
-                submitBtn.textContent = originalText;
-                submitBtn.disabled = false;
-            }
-        });
-        
-        // Handle Registration
-        document.getElementById('registerForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const businessName = document.getElementById('regBusinessName').value.trim();
-            const email = document.getElementById('regEmail').value.trim();
-            const phone = document.getElementById('regPhone').value.trim();
-            const password = document.getElementById('regPassword').value;
-            const confirmPassword = document.getElementById('regConfirmPassword').value;
-            const bankName = document.getElementById('regBank').value;
-            const accountNumber = document.getElementById('regAccountNumber').value.trim();
-            const accountName = document.getElementById('regAccountName').value.trim();
-            
-            // Validation
-            if (!businessName || !email || !phone || !password || !confirmPassword) {
-                showAlert('Please fill in all fields', 'error');
-                return;
-            }
-            
-            if (password !== confirmPassword) {
-                showAlert('Passwords do not match', 'error');
-                return;
-            }
-            
-            if (password.length < 6) {
-                showAlert('Password must be at least 6 characters long', 'error');
-                return;
-            }
-            
-            if (!bankName || !accountNumber || !accountName) {
-                showAlert('Please provide all bank details for payment settlements', 'error');
-                return;
-            }
-            
-            // Validate phone number
-            const phoneRegex = /^254[0-9]{9}$/;
-            if (!phoneRegex.test(phone)) {
-                showAlert('Please enter a valid Kenyan phone number (e.g., 254712345678)', 'error');
-                return;
-            }
-            
-            // Show loading state
-            const submitBtn = document.getElementById('registerSubmitBtn');
-            const originalText = submitBtn.textContent;
-            submitBtn.textContent = 'Creating account...';
-            submitBtn.disabled = true;
-            submitBtn.classList.add('loading-btn');
-            
-            try {
-                const result = await auth.register(
-                    email, password, businessName, phone, 
-                    bankName, accountNumber, accountName
-                );
-                
-                if (result.success) {
-                    showAlert(result.message, 'success');
-                    setTimeout(() => {
-                        window.location.href = 'dashboard.html';
-                    }, 2000);
-                } else {
-                    showAlert(result.message, 'error');
-                    submitBtn.textContent = originalText;
-                    submitBtn.disabled = false;
-                    submitBtn.classList.remove('loading-btn');
-                }
-            } catch (error) {
-                console.error('Registration error:', error);
-                showAlert('Registration failed. Please try again.', 'error');
-                submitBtn.textContent = originalText;
-                submitBtn.disabled = false;
-                submitBtn.classList.remove('loading-btn');
-            }
-        });
-        
-        // Check if already logged in
-        if (auth.isLoggedIn()) {
-            window.location.href = 'dashboard.html';
         }
     </script>
 </body>
-                                    </html>
+</html>
