@@ -6,154 +6,118 @@
     <title>Login - SmartInvoice Kenya</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        .auth-container {
-            max-width: 450px;
-            margin: 50px auto;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
-        }
-        
-        .auth-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-        
-        .auth-form {
-            padding: 30px;
-        }
-        
-        .toggle-buttons {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #e5e7eb;
-        }
-        
-        .toggle-btn {
-            flex: 1;
-            padding: 10px;
-            background: none;
-            border: none;
-            font-size: 1.1em;
-            cursor: pointer;
-            color: #6b7280;
-            transition: all 0.3s;
-        }
-        
-        .toggle-btn.active {
-            color: #667eea;
-            border-bottom: 2px solid #667eea;
-            margin-bottom: -2px;
-        }
-        
-        .form-panel {
-            display: none;
-        }
-        
-        .form-panel.active {
-            display: block;
-        }
-        
-        .alert {
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-        }
-        
-        .alert.success {
-            background: #d1fae5;
-            color: #065f46;
-            display: block;
-        }
-        
-        .alert.error {
-            background: #fee2e2;
-            color: #991b1b;
-            display: block;
-        }
-        
-        .alert.info {
-            background: #dbeafe;
-            color: #1e40af;
-            display: block;
-        }
-        
-        .link {
-            text-align: center;
-            margin-top: 20px;
-            color: #6b7280;
-        }
-        
-        .link a {
-            color: #667eea;
-            text-decoration: none;
-        }
-        
-        .feature-list {
-            background: #f9fafb;
-            padding: 20px;
-            border-radius: 12px;
-            margin-top: 20px;
-        }
-        
-        .feature-list h4 {
-            margin-bottom: 10px;
-            color: #374151;
-        }
-        
-        .feature-list ul {
-            list-style: none;
-            padding-left: 0;
-        }
-        
-        .feature-list li {
-            padding: 5px 0;
-            color: #4b5563;
-        }
-        
-        .feature-list li:before {
-            content: "✔";
-            color: #667eea;
-            margin-right: 8px;
-        }
-        
-        .phone-hint {
-            font-size: 0.75em;
-            color: #6b7280;
-            margin-top: 4px;
-        }
-        
-        select, input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #d1d5db;
-            border-radius: 8px;
-            font-size: 1em;
-        }
-        
-        .bank-details-section {
-            background: #f9fafb;
-            padding: 15px;
-            border-radius: 12px;
-            margin: 15px 0;
-        }
-        
-        .bank-details-section h4 {
-            margin-bottom: 15px;
-            color: #374151;
-            font-size: 0.9em;
-        }
-        
-        .loading-btn {
-            opacity: 0.7;
-            cursor: not-allowed;
-        }
-    </style>
+    /* Authority Palette */
+    :root {
+        --primary-navy: #0f172a;
+        --secondary-navy: #1e293b;
+        --trust-green: #059669;
+        --bg-light: #f8fafc;
+        --text-muted: #475569;
+    }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+
+    .auth-container {
+        max-width: 450px;
+        width: 100%;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+        overflow: hidden;
+    }
+    
+    .auth-header {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        color: white;
+        padding: 40px 30px;
+        text-align: center;
+    }
+    
+    .auth-form { padding: 30px; }
+    
+    .toggle-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 30px;
+        border-bottom: 2px solid #e2e8f0;
+    }
+    
+    .toggle-btn {
+        flex: 1;
+        padding: 10px;
+        background: none;
+        border: none;
+        font-size: 1.1em;
+        cursor: pointer;
+        color: var(--text-muted);
+        transition: all 0.3s;
+    }
+    
+    .toggle-btn.active {
+        color: var(--primary-navy);
+        border-bottom: 2px solid var(--trust-green);
+        margin-bottom: -2px;
+        font-weight: 600;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--text-muted);
+        font-size: 0.9em;
+    }
+
+    .form-group { margin-bottom: 20px; }
+    
+    input, select {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 1em;
+    }
+    
+    input:focus {
+        outline: none;
+        border-color: var(--trust-green);
+    }
+
+    .btn-primary {
+        width: 100%;
+        background: var(--trust-green);
+        color: white;
+        border: none;
+        padding: 14px;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+    
+    .btn-primary:hover { background: #065f46; }
+    
+    .alert.success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+    .alert.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    
+    .link a { color: var(--trust-green); text-decoration: none; font-weight: 500; }
+    
+    .feature-list { background: var(--bg-light); padding: 20px; border-radius: 12px; margin-top: 20px; }
+    .feature-list li:before { content: "✔"; color: var(--trust-green); margin-right: 8px; }
+    
+    .bank-details-section { background: var(--bg-light); padding: 15px; border-radius: 12px; margin: 15px 0; }
+    
+    .loading-btn { opacity: 0.7; cursor: not-allowed; }
+</style>
+
+            
 </head>
 <body>
     <div class="auth-container">
